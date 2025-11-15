@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "homepage": "https://website-url.github.io/website/",
+  "homepage": "https://crypticsy.github.io/the-marauders-map/",
   "scripts": {
     "start": "vite",
     "deploy": "yarn build && gh-pages -d dist",

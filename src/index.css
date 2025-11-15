@@ -1,0 +1,258 @@
+@layer tailwind-base, primereact, tailwind-utilities;
+
+@layer tailwind-base {
+  @tailwind base;
+}
+
+@layer tailwind-utilities {
+  @tailwind components;
+  @tailwind utilities;
+}
+
+@layer components {
+  .text-2xs {
+    font-size: 0.65rem;
+    line-height: 0.75rem /* 12px */;
+  }
+  .text-3xs {
+    font-size: 0.55rem;
+    line-height: 0.65rem /* 12px */;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=UnifrakturMaguntia&family=IM+Fell+English:ital@0;1&family=Shadows+Into+Light&family=Satisfy&display=swap');
+
+/* Custom font faces for Marauder's Map style */
+@font-face {
+  font-family: 'MarauderTitle';
+  src: local('IM Fell English'), local('UnifrakturMaguntia');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'MarauderScript';
+  src: local('Shadows Into Light'), local('Satisfy');
+  font-weight: normal;
+  font-style: normal;
+}
+
+html {
+  scroll-behavior: smooth;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #e8dcc4 !important;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
+  min-height: -moz-available;
+  min-height: -webkit-fill-available;
+  font-family: "Crimson Text", serif;
+  /* Support for notched devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  background-color: #e8dcc4 !important;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+p{
+  font-family: "Crimson Text", serif;
+  line-height: 1.25rem;
+}
+
+/* Parchment texture effect - old map paper style */
+.parchment-texture {
+  background-color: #e8dcc4;
+  background-image:
+    /* Heavy paper fiber texture */
+    repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(139, 111, 71, 0.05) 1px, rgba(139, 111, 71, 0.05) 2px),
+    repeating-linear-gradient(90deg, transparent, transparent 1px, rgba(139, 111, 71, 0.05) 1px, rgba(139, 111, 71, 0.05) 2px),
+    /* Diagonal texture for paper weave */
+    repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(101, 67, 33, 0.02) 3px, rgba(101, 67, 33, 0.02) 6px),
+    repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(101, 67, 33, 0.02) 3px, rgba(101, 67, 33, 0.02) 6px),
+    /* Large age spots and stains */
+    radial-gradient(ellipse at 15% 25%, rgba(139, 111, 71, 0.25) 0%, transparent 4%),
+    radial-gradient(ellipse at 85% 15%, rgba(139, 111, 71, 0.2) 0%, transparent 5%),
+    radial-gradient(circle at 45% 85%, rgba(90, 62, 43, 0.18) 0%, transparent 6%),
+    radial-gradient(circle at 75% 65%, rgba(90, 62, 43, 0.15) 0%, transparent 4%),
+    radial-gradient(ellipse at 25% 75%, rgba(139, 111, 71, 0.2) 0%, transparent 5%),
+    radial-gradient(circle at 90% 90%, rgba(90, 62, 43, 0.22) 0%, transparent 7%),
+    radial-gradient(circle at 10% 50%, rgba(139, 111, 71, 0.12) 0%, transparent 3%),
+    radial-gradient(ellipse at 60% 20%, rgba(90, 62, 43, 0.1) 0%, transparent 4%),
+    /* Water stains */
+    radial-gradient(ellipse at 30% 10%, rgba(139, 111, 71, 0.08) 0%, transparent 8%),
+    radial-gradient(ellipse at 70% 80%, rgba(90, 62, 43, 0.06) 0%, transparent 10%),
+    /* Overall aged tone with yellowing */
+    linear-gradient(135deg, #f0e6d2 0%, #e8dcc4 30%, #d9cab3 70%, #cbb899 100%);
+  position: relative;
+}
+
+.parchment-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    /* Strong vignette effect for old map */
+    radial-gradient(ellipse at center, transparent 0%, transparent 40%, rgba(90, 62, 43, 0.15) 80%, rgba(90, 62, 43, 0.25) 100%);
+  pointer-events: none;
+}
+
+.parchment-texture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    /* Ink splatters and smudges */
+    radial-gradient(circle at 10% 15%, rgba(0, 0, 0, 0.35) 0%, transparent 0.6%),
+    radial-gradient(circle at 92% 25%, rgba(0, 0, 0, 0.3) 0%, transparent 0.5%),
+    radial-gradient(circle at 30% 90%, rgba(0, 0, 0, 0.25) 0%, transparent 0.7%),
+    radial-gradient(circle at 88% 78%, rgba(0, 0, 0, 0.32) 0%, transparent 0.4%),
+    radial-gradient(circle at 5% 60%, rgba(0, 0, 0, 0.28) 0%, transparent 0.5%),
+    radial-gradient(circle at 50% 50%, rgba(90, 62, 43, 0.15) 0%, transparent 0.3%),
+    /* Edge wear */
+    radial-gradient(ellipse at 0% 0%, rgba(90, 62, 43, 0.2) 0%, transparent 15%),
+    radial-gradient(ellipse at 100% 0%, rgba(90, 62, 43, 0.2) 0%, transparent 15%),
+    radial-gradient(ellipse at 0% 100%, rgba(90, 62, 43, 0.2) 0%, transparent 15%),
+    radial-gradient(ellipse at 100% 100%, rgba(90, 62, 43, 0.2) 0%, transparent 15%);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Ink splatter effects */
+.ink-splatter {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(90, 62, 43, 0.2) 0%, transparent 70%);
+}
+
+/* Handwritten font for special text */
+.handwritten {
+  font-family: 'Crimson Text', serif;
+  font-style: italic;
+}
+
+/* Ornate border styles */
+.ornate-border {
+  border-image: repeating-linear-gradient(
+    45deg,
+    #8b6f47,
+    #8b6f47 10px,
+    transparent 10px,
+    transparent 20px
+  ) 8;
+}
+
+/* Magical glowing effects for footprints */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.15;
+    filter: blur(3px);
+  }
+  50% {
+    opacity: 0.25;
+    filter: blur(4px);
+  }
+}
+
+@keyframes step-active {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes step-inactive {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.4;
+  }
+}
+
+.footprint-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.active-step {
+  animation: step-active 0.4s ease-in-out;
+  filter: drop-shadow(0 0 1px rgba(139, 111, 71, 0.8));
+}
+
+.inactive-step {
+  animation: step-inactive 0.4s ease-in-out;
+  filter: drop-shadow(0 0 0.5px rgba(139, 111, 71, 0.4));
+}
+
+.footprint-label {
+  filter: drop-shadow(0 0 1px rgba(139, 111, 71, 0.6));
+}
+
+/* Magical shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.magical-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(184, 134, 11, 0.2) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+.prevent-select {
+  -webkit-touch-callout: none;
+  /* iOS Safari */
+  -webkit-user-select: none;
+  /* Safari */
+  -khtml-user-select: none;
+  /* Konqueror HTML */
+  -moz-user-select: none;
+  /* Old versions of Firefox */
+  -ms-user-select: none;
+  /* Internet Explorer/Edge */
+  user-select: none;
+  /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+}

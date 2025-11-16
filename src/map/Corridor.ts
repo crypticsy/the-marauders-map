@@ -33,10 +33,10 @@ export class Corridor {
   initializeNavMesh(roomA: Room, roomB: Room): void {
     this.fullPath = this.generatePath(roomA, roomB);
 
-    // Create NavMesh for corridor with balanced grid size
+    // Create NavMesh for corridor with fine grid for better pathfinding
     if (this.fullPath.length >= 2) {
       const bounds = this.getCorridorBounds();
-      this.navMesh = new NavMeshImpl(bounds, [], 0.25); // Coarser grid for corridors - less nodes, faster pathfinding
+      this.navMesh = new NavMeshImpl(bounds, [], 0.2); // Finer grid to handle curved corridors
     }
   }
 
@@ -61,9 +61,9 @@ export class Corridor {
       maxZ = Math.max(maxZ, point.z);
     });
 
-    // Use generous padding to ensure overlap with room doorways
-    // This ensures smooth transitions between rooms and corridors
-    const padding = this.width * 1.5;
+    // Use very generous padding to ensure curved paths are fully covered
+    // This ensures smooth transitions and full coverage of curved corridors
+    const padding = this.width * 2.0;
 
     return {
       min: { x: minX - padding, z: minZ - padding },

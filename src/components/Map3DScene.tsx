@@ -127,27 +127,26 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
             enablePan={true}
             enableZoom={true}
             enableRotate={true}
-            maxPolarAngle={Math.PI / 2.2}
+            maxPolarAngle={Math.PI / 2.1}
             minPolarAngle={Math.PI / 6}
             minDistance={10}
             maxDistance={80}
           />
 
-          {/* Lighting - Adjusted for better texture visibility */}
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[10, 10, 5]} intensity={0.7} castShadow />
-          <directionalLight position={[-10, 5, -5]} intensity={0.3} />
+          {/* Lighting - Bright and clean */}
+          <ambientLight intensity={0.4} />
+          <directionalLight position={[10, 10, 5]} intensity={0.2} castShadow />
+          <directionalLight position={[-10, 5, -5]} intensity={0.5} />
           <pointLight position={[0, 15, 0]} intensity={0.4} color="#ffd700" />
-          <spotLight position={[0, 20, 0]} angle={0.6} intensity={0.2} color="#e8dcc4" />
 
-          {/* Parchment base - aged map paper with texture */}
+          {/* Modern minimal map base - clean plain surface */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
             <planeGeometry args={[50, 50]} />
             <meshStandardMaterial
               map={parchmentTexture}
               color="#d9cab3"
-              roughness={0.95}
-              metalness={0.0}
+              roughness={0.85}
+              metalness={0.02}
             />
           </mesh>
 

@@ -23,7 +23,7 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
   // Load old paper texture from local assets
   const parchmentTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
-    const texture = loader.load('/textures/old-paper.jpg');
+    const texture = loader.load(`${import.meta.env.BASE_URL}textures/old-paper.jpg`);
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     // No repeat - texture covers the entire map once

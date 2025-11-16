@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { IoFootsteps } from "react-icons/io5";
 import { FaWandMagicSparkles } from "react-icons/fa6";
 import { IoSparkles } from "react-icons/io5";
+import { Toaster } from "react-hot-toast";
+import { useCustomToast } from "../hooks/useCustomToast";
 
 interface ActivationScreenProps {
   onActivate: () => void;
@@ -12,26 +14,111 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
 }) => {
   const [phrase, setPhrase] = useState("");
   const [isActivating, setIsActivating] = useState(false);
-  const correctPhrase = "i solemnly swear that i am up to no good";
+  const { showToast } = useCustomToast();
+  const correctPhrases = [
+    "i solemnly swear that i am up to no good",
+    "i solemnly swear that i am upto no good"
+  ];
 
-  // Check if the current phrase matches the correct one
-  const isPhraseCorrect = phrase.toLowerCase().trim() === correctPhrase;
+  // Array of error messages
+  const errorMessages = [
+    "The Marauders would like to inform you that you clearly don't know what you're doing.",
+    "Nice try, but incorrect incantation. Do behave yourself.",
+    "We are not impressed. Come back when you know the proper words.",
+    "Mischief managed… or rather, mischief attempted and failed.",
+    "The Map refuses to reveal its secrets to someone so hopelessly confused.",
+    "Try again, unless you're afraid the correct phrase might tax your memory.",
+    "The Map is currently unavailable due to user incompetence.",
+    "Wrong again. One might think you're not much of a mischief-maker at all.",
+  ];
+
+  // Check if the current phrase matches any of the correct ones
+  const isPhraseCorrect = correctPhrases.includes(phrase.toLowerCase().trim());
+
+  // Play error sound effect
+  const playErrorSound = () => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // Create a more ominous, magical error sound
+    const playTone = (frequency: number, startTime: number, duration: number, volume: number = 0.3) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'triangle'; // Softer, more magical sound
+
+      gainNode.gain.setValueAtTime(volume, audioContext.currentTime + startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+
+      oscillator.start(audioContext.currentTime + startTime);
+      oscillator.stop(audioContext.currentTime + startTime + duration);
+    };
+
+    // Dark, ominous descending chord sequence
+    playTone(330, 0, 0.15, 0.2);    // E (ominous start)
+    playTone(277, 0.08, 0.15, 0.2); // C# (dissonant)
+    playTone(220, 0.16, 0.25, 0.25); // A (final low tone)
+  };
+
+  // Play success sound effect
+  const playSuccessSound = () => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // Create magical, uplifting success sound
+    const playTone = (frequency: number, startTime: number, duration: number, volume: number = 0.25, type: OscillatorType = 'sine') => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = type;
+
+      gainNode.gain.setValueAtTime(volume, audioContext.currentTime + startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+
+      oscillator.start(audioContext.currentTime + startTime);
+      oscillator.stop(audioContext.currentTime + startTime + duration);
+    };
+
+    // Magical ascending arpeggio (like a successful spell)
+    playTone(523, 0, 0.2, 0.15, 'sine');      // C5 (magical start)
+    playTone(659, 0.08, 0.2, 0.18, 'sine');   // E5 (rising)
+    playTone(784, 0.16, 0.25, 0.2, 'sine');   // G5 (ascending)
+    playTone(1047, 0.24, 0.4, 0.15, 'triangle'); // C6 (triumphant high note with shimmer)
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isPhraseCorrect) {
+      // Play success sound
+      playSuccessSound();
+
       setIsActivating(true);
       setTimeout(() => {
         onActivate();
       }, 2000);
     } else {
-      // Shake animation for wrong phrase
-      setPhrase("");
+      // Play error sound
+      playErrorSound();
+
+      // Show random error message
+      const randomMessage = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+      showToast({
+        message: randomMessage,
+        type: "error",
+        duration: 4000,
+      });
     }
   };
 
   return (
-    <div className="w-screen h-screen bg-[#e8dcc4] parchment-texture flex items-center justify-center overflow-hidden relative">
+    <div className="w-screen h-screen bg-[#e8dcc4] parchment-texture flex items-center justify-center overflow-hidden relative pb-8 md:pb-20">
+      <Toaster position="top-center" reverseOrder={false} />
       {/* Magical ink blot effect */}
       {isActivating && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -146,10 +233,10 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
           {/* Hint */}
           <div className="mt-6 text-center">
             <p
-              className="text-xs text-black/50 italic"
-              style={{ fontFamily: "'Shadows Into Light', cursive" }}
+              className="text-xs text-black/50"
+              style={{ fontFamily:  "'IM Fell English', serif"}}
             >
-              Hint: "I solemnly swear that I am up to no good"
+              Hint: “I solemnly swear that I am up to no good"
             </p>
           </div>
 

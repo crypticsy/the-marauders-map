@@ -23,18 +23,19 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
   const { x, y, z } = room.position;
   const [width, height, depth] = [room.size.x, room.size.y, room.size.z];
 
+  // Consistent ink color for all rooms (same as footsteps and corridors)
+  const inkColor = '#3d2817';
+
   return (
     <group position={[x, y, z]}>
       {/* Base outline on parchment */}
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[width, depth]} />
         <meshStandardMaterial
-          color={room.color}
+          color={inkColor}
           transparent
-          opacity={0.4}
+          opacity={0.3}
           side={THREE.DoubleSide}
-          emissive={room.color}
-          emissiveIntensity={0.1}
         />
       </mesh>
 
@@ -48,11 +49,11 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
       >
         <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial
-          color={room.color}
+          color={inkColor}
           transparent
           opacity={room.getOpacity()}
           wireframe
-          emissive={room.color}
+          emissive={inkColor}
           emissiveIntensity={room.getEmissiveIntensity()}
         />
       </mesh>

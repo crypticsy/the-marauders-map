@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { Corridor } from '../map/Corridor';
 import { Room } from '../map/Room';
-import { Vector2 } from '../map/types';
 
 interface Corridor3DProps {
   corridor: Corridor;
@@ -37,39 +36,40 @@ export const Corridor3D: React.FC<Corridor3DProps> = ({
 
   if (!pathCurve || !isActive) return null;
 
+  // Consistent ink color for corridors (same as footsteps and rooms)
+  const inkColor = '#3d2817';
+
   return (
     <group>
-      {/* Main corridor path - hand-drawn style */}
+      {/* Main corridor path - more transparent like rooms */}
       <mesh>
         <tubeGeometry args={[pathCurve, 64, corridor.width / 2, 8, false]} />
         <meshStandardMaterial
-          color="#8b6f47"
+          color={inkColor}
           transparent
-          opacity={0.15}
-          emissive="#5a3e2b"
-          emissiveIntensity={0.1}
+          opacity={0.25} // More transparent to match rooms
         />
       </mesh>
 
-      {/* Ink outline for hand-drawn effect */}
+      {/* Ink outline for hand-drawn effect - also more transparent */}
       <mesh>
         <tubeGeometry args={[pathCurve, 64, corridor.width / 2 + 0.05, 8, false]} />
         <meshStandardMaterial
-          color="#000000"
+          color={inkColor}
           transparent
-          opacity={0.2}
+          opacity={0.15} // More transparent
           wireframe
         />
       </mesh>
 
-      {/* Render connection point markers (subtle) */}
+      {/* Render connection point markers (very subtle) */}
       {waypoints.map((wp, index) => (
         <mesh key={index} position={[wp.x, 0.02, wp.z]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[0.15, 16]} />
           <meshStandardMaterial
-            color="#8b6f47"
+            color={inkColor}
             transparent
-            opacity={0.1}
+            opacity={0.08} // Very subtle
           />
         </mesh>
       ))}

@@ -187,7 +187,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
                 type="text"
                 value={phrase}
                 onChange={(e) => setPhrase(e.target.value)}
-                placeholder="I solemnly swear..."
+                placeholder="Enter Your Incantation"
                 className="w-full px-6 py-4 bg-transparent border-2 border-black/10 border-dashed rounded text-center text-black placeholder-black/40 focus:outline-none focus:border-black/60 transition-all shadow-inner"
                 style={{
                   fontFamily: "'Shadows Into Light', cursive",

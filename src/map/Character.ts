@@ -1,28 +1,26 @@
-import { CharacterConfig, Vector2, PathSegment } from './types';
+import { CharacterConfig, Vector2, BehaviorType, Behavior } from './types';
 import { Room } from './Room';
 import { Corridor } from './Corridor';
+import { BehaviorSystem, DEFAULT_BEHAVIOR_CONFIG } from './BehaviorSystem';
 
 /**
  * Character class representing a person moving through the map
- * Handles animated footstep movement with AI-based pathfinding
+ * Handles NavMesh-based pathfinding, collision detection, and behavior system
  */
 export class Character {
   public id: string;
   public name: string;
   public color: string;
   public speed: number;
-  private currentSegmentIndex: number = 0;
-  private progress: number = 0; // 0-1 progress through current segment
   private currentPosition: Vector2;
-  private pathSegments: PathSegment[] = [];
   private rooms: Map<string, Room>;
   private corridors: Map<string, Corridor>;
   private navigationGraph: Map<string, string[]> = new Map(); // Room connections
   private currentRoomId: string = '';
-  private targetRoomId: string = '';
-  private isAIMode: boolean = true;
-  private isWandering: boolean = false; // Is character wandering in current room?
-  private wanderTimer: number = 0;
+  private currentBehavior: Behavior | null = null;
+  private behaviorSystem: BehaviorSystem;
+  private currentPath: Vector2[] = []; // Current NavMesh path being followed
+  private pathIndex: number = 0; // Index in current path
 
   constructor(config: CharacterConfig) {
     this.id = config.id;
@@ -32,6 +30,7 @@ export class Character {
     this.currentPosition = { x: 0, z: 0 };
     this.rooms = new Map();
     this.corridors = new Map();
+    this.behaviorSystem = new BehaviorSystem(DEFAULT_BEHAVIOR_CONFIG);
   }
 
   /**
@@ -46,6 +45,13 @@ export class Character {
 
     corridors.forEach((corridor) => {
       const { roomAId, roomBId } = corridor;
+
+      // Initialize corridor NavMesh
+      const roomA = rooms.get(roomAId);
+      const roomB = rooms.get(roomBId);
+      if (roomA && roomB) {
+        corridor.initializeNavMesh(roomA, roomB);
+      }
 
       // Add bidirectional connections
       if (!this.navigationGraph.has(roomAId)) {
@@ -65,98 +71,113 @@ export class Character {
 
     const startRoom = rooms.get(this.currentRoomId);
     if (startRoom) {
-      this.currentPosition = { x: startRoom.position.x, z: startRoom.position.z };
+      this.currentPosition = startRoom.getRandomWalkablePosition();
     }
 
-    // Choose first destination
-    this.chooseNewDestination();
+    // Choose first behavior
+    this.chooseNewBehavior();
   }
 
   /**
-   * Choose a new action: wander in current room or travel to another room
+   * Choose a new behavior for the character
    */
-  private chooseNewDestination(): void {
+  private chooseNewBehavior(): void {
     if (!this.currentRoomId) {
       console.warn(`${this.name}: No current room set!`);
       return;
     }
 
-    // 60% chance to wander in current room, 40% chance to travel
-    if (Math.random() < 0.6) {
-      this.startWandering();
-    } else {
-      this.travelToAnotherRoom();
+    const availableRooms = Array.from(this.rooms.keys());
+    this.currentBehavior = this.behaviorSystem.chooseNextBehavior(
+      this.currentRoomId,
+      availableRooms
+    );
+
+    console.log(
+      `${this.name}: New behavior - ${this.currentBehavior.type} in ${this.currentRoomId}`
+    );
+
+    this.executeBehavior();
+  }
+
+  /**
+   * Execute the current behavior
+   */
+  private executeBehavior(): void {
+    if (!this.currentBehavior) return;
+
+    switch (this.currentBehavior.type) {
+      case BehaviorType.WAIT:
+        this.executeWaitBehavior();
+        break;
+      case BehaviorType.ROAM:
+        this.executeRoamBehavior();
+        break;
+      case BehaviorType.MOVE_TO_TARGET:
+        this.executeMoveToTargetBehavior();
+        break;
     }
   }
 
   /**
-   * Start wandering within the current room
+   * Execute WAIT behavior - stay in place
    */
-  private startWandering(): void {
+  private executeWaitBehavior(): void {
+    this.currentPath = [];
+    this.pathIndex = 0;
+  }
+
+  /**
+   * Execute ROAM behavior - wander within current room
+   */
+  private executeRoamBehavior(): void {
     const currentRoom = this.rooms.get(this.currentRoomId);
     if (!currentRoom) return;
 
-    this.isWandering = true;
-    this.wanderTimer = 3000 + Math.random() * 5000; // Wander for 3-8 seconds
+    // Get random walkable position in room
+    const targetPosition = currentRoom.getRandomWalkablePosition();
 
-    // Create random waypoints within the room
-    const numWaypoints = 3 + Math.floor(Math.random() * 3); // 3-5 waypoints
-    const waypoints: Vector2[] = [];
+    // Find path using NavMesh
+    this.currentPath = currentRoom.findPathInRoom(this.currentPosition, targetPosition);
+    this.pathIndex = 0;
 
-    const roomSize = currentRoom.size;
-    const roomPos = currentRoom.position;
-
-    for (let i = 0; i < numWaypoints; i++) {
-      waypoints.push({
-        x: roomPos.x + (Math.random() - 0.5) * roomSize.x * 0.6,
-        z: roomPos.z + (Math.random() - 0.5) * roomSize.z * 0.6,
-      });
-    }
-
-    // Add current position as first waypoint for smooth transition
-    waypoints.unshift({ ...this.currentPosition });
-
-    this.pathSegments = [{
-      type: 'room',
-      id: this.currentRoomId,
-      waypoints,
-    }];
-
-    this.currentSegmentIndex = 0;
-    this.progress = 0;
-
-    console.log(`${this.name}: Wandering in ${this.currentRoomId}`);
+    console.log(`${this.name}: Roaming to position (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
   }
 
   /**
-   * Travel to another room
+   * Execute MOVE_TO_TARGET behavior - travel to another room
    */
-  private travelToAnotherRoom(): void {
-    const roomIds = Array.from(this.rooms.keys());
+  private executeMoveToTargetBehavior(): void {
+    if (!this.currentBehavior?.targetRoomId) return;
 
-    // Choose a random room that's not the current room
-    const availableRooms = roomIds.filter(id => id !== this.currentRoomId);
-    if (availableRooms.length === 0) return;
+    const targetRoomId = this.currentBehavior.targetRoomId;
 
-    this.isWandering = false;
-    this.targetRoomId = availableRooms[Math.floor(Math.random() * availableRooms.length)];
-
-    // Find path using BFS from current location
-    const path = this.findPath(this.currentRoomId, this.targetRoomId);
-
-    if (path.length > 0) {
-      this.buildPathSegments(path);
-      this.currentSegmentIndex = 0;
-      this.progress = 0;
-
-      console.log(`${this.name}: Traveling from ${this.currentRoomId} to ${this.targetRoomId}`);
+    if (targetRoomId === this.currentRoomId) {
+      // Already in target room, just roam instead
+      this.currentBehavior = this.behaviorSystem.createRoamBehavior(this.currentRoomId);
+      this.executeRoamBehavior();
+      return;
     }
+
+    // Find room path using BFS
+    const roomPath = this.findRoomPath(this.currentRoomId, targetRoomId);
+
+    if (roomPath.length === 0) {
+      console.warn(`${this.name}: No path found to ${targetRoomId}`);
+      this.chooseNewBehavior();
+      return;
+    }
+
+    // Build NavMesh path through rooms and corridors
+    this.buildNavMeshPath(roomPath);
+
+    console.log(`${this.name}: Moving from ${this.currentRoomId} to ${targetRoomId}`);
   }
 
   /**
    * Find path between two rooms using BFS
    */
-  private findPath(startId: string, endId: string): string[] {
+  private findRoomPath(startId: string, endId: string): string[] {
     const queue: Array<{ roomId: string; path: string[] }> = [{ roomId: startId, path: [startId] }];
     const visited = new Set<string>([startId]);
 
@@ -180,49 +201,101 @@ export class Character {
   }
 
   /**
-   * Build path segments from room sequence (explicitly tracks room transitions)
+   * Build NavMesh path through multiple rooms and corridors
    */
-  private buildPathSegments(roomPath: string[]): void {
-    this.pathSegments = [];
+  private buildNavMeshPath(roomPath: string[]): void {
+    this.currentPath = [];
 
     for (let i = 0; i < roomPath.length; i++) {
       const roomId = roomPath[i];
       const room = this.rooms.get(roomId);
       if (!room) continue;
 
-      // If not the first room, add corridor to this room
-      if (i > 0) {
-        const prevRoomId = roomPath[i - 1];
-        const corridor = this.findCorridorBetween(prevRoomId, roomId);
+      if (i === 0) {
+        // First room - start from current position
+        const roomCenter = { x: room.position.x, z: room.position.z };
+        const exitPoint =
+          i < roomPath.length - 1
+            ? this.getExitPointToNextRoom(room, roomPath[i + 1])
+            : room.getNearestWalkablePoint(roomCenter);
 
-        if (corridor) {
+        const pathInRoom = room.findPathInRoom(this.currentPosition, exitPoint);
+        this.currentPath.push(...pathInRoom);
+      } else if (i === roomPath.length - 1) {
+        // Last room - navigate to center or random position
+        const entryPoint = this.getEntryPointFromPreviousRoom(room, roomPath[i - 1]);
+        const targetPosition = room.getRandomWalkablePosition();
+        const pathInRoom = room.findPathInRoom(entryPoint, targetPosition);
+        this.currentPath.push(...pathInRoom);
+      } else {
+        // Middle room - navigate through
+        const entryPoint = this.getEntryPointFromPreviousRoom(room, roomPath[i - 1]);
+        const exitPoint = this.getExitPointToNextRoom(room, roomPath[i + 1]);
+        const pathInRoom = room.findPathInRoom(entryPoint, exitPoint);
+        this.currentPath.push(...pathInRoom);
+      }
+
+      // Add corridor path if not the last room
+      if (i < roomPath.length - 1) {
+        const corridor = this.findCorridorBetween(roomId, roomPath[i + 1]);
+        if (corridor && corridor.navMesh) {
           const roomA = this.rooms.get(corridor.roomAId);
           const roomB = this.rooms.get(corridor.roomBId);
           if (roomA && roomB) {
-            this.pathSegments.push({
-              type: 'corridor',
-              id: corridor.id,
-              waypoints: corridor.getWaypoints(roomA, roomB),
-            });
+            const corridorWaypoints = corridor.getWaypoints(roomA, roomB);
+            // Use corridor NavMesh to find path between first and last waypoint
+            if (corridorWaypoints.length >= 2) {
+              const corridorStart = corridorWaypoints[0];
+              const corridorEnd = corridorWaypoints[corridorWaypoints.length - 1];
+              const corridorNavPath = corridor.navMesh.findPath(corridorStart, corridorEnd);
+              this.currentPath.push(...corridorNavPath);
+            } else {
+              // Fallback to direct waypoints if too few
+              this.currentPath.push(...corridorWaypoints);
+            }
           }
         }
       }
-
-      // Add room waypoint - just the center for passing through
-      this.pathSegments.push({
-        type: 'room',
-        id: roomId,
-        waypoints: [
-          { x: room.position.x, z: room.position.z },
-          { x: room.position.x, z: room.position.z }
-        ],
-      });
     }
 
-    // Track that we'll be entering the last room in the path
+    this.pathIndex = 0;
+
+    // Update current room to target
     if (roomPath.length > 0) {
-      this.targetRoomId = roomPath[roomPath.length - 1];
+      // We'll update currentRoomId as we move through rooms
     }
+  }
+
+  /**
+   * Get entry point to room from previous room
+   */
+  private getEntryPointFromPreviousRoom(room: Room, previousRoomId: string): Vector2 {
+    const corridor = this.findCorridorBetween(previousRoomId, room.id);
+    if (corridor) {
+      const connectionName =
+        corridor.roomAId === room.id ? corridor.connectionA : corridor.connectionB;
+      const point = room.getConnectionPoint(connectionName);
+      if (point) {
+        return room.getNearestWalkablePoint(point);
+      }
+    }
+    return room.getNearestWalkablePoint({ x: room.position.x, z: room.position.z });
+  }
+
+  /**
+   * Get exit point from room to next room
+   */
+  private getExitPointToNextRoom(room: Room, nextRoomId: string): Vector2 {
+    const corridor = this.findCorridorBetween(room.id, nextRoomId);
+    if (corridor) {
+      const connectionName =
+        corridor.roomAId === room.id ? corridor.connectionA : corridor.connectionB;
+      const point = room.getConnectionPoint(connectionName);
+      if (point) {
+        return room.getNearestWalkablePoint(point);
+      }
+    }
+    return room.getNearestWalkablePoint({ x: room.position.x, z: room.position.z });
   }
 
   /**
@@ -230,8 +303,10 @@ export class Character {
    */
   private findCorridorBetween(roomA: string, roomB: string): Corridor | null {
     for (const corridor of this.corridors.values()) {
-      if ((corridor.roomAId === roomA && corridor.roomBId === roomB) ||
-          (corridor.roomAId === roomB && corridor.roomBId === roomA)) {
+      if (
+        (corridor.roomAId === roomA && corridor.roomBId === roomB) ||
+        (corridor.roomAId === roomB && corridor.roomBId === roomA)
+      ) {
         return corridor;
       }
     }
@@ -239,84 +314,134 @@ export class Character {
   }
 
   /**
-   * Update character position based on time delta (AI navigation with wandering)
+   * Update character position based on time delta
    */
   update(deltaTime: number): void {
-    // Handle wandering timer
-    if (this.isWandering) {
-      this.wanderTimer -= deltaTime * 1000; // Convert to milliseconds
-      if (this.wanderTimer <= 0) {
-        // Finished wandering, choose new action
-        this.chooseNewDestination();
-        return;
-      }
-    }
-
-    if (this.pathSegments.length === 0) {
-      this.chooseNewDestination();
+    if (!this.currentBehavior) {
+      this.chooseNewBehavior();
       return;
     }
 
-    const currentSegment = this.pathSegments[this.currentSegmentIndex];
-    if (!currentSegment || currentSegment.waypoints.length < 2) {
-      this.chooseNewDestination();
+    // Update behavior timer
+    const behaviorComplete = this.behaviorSystem.updateBehavior(
+      this.currentBehavior,
+      deltaTime
+    );
+
+    if (behaviorComplete) {
+      this.chooseNewBehavior();
       return;
     }
 
-    // Update current room if we're in a room segment
-    if (currentSegment.type === 'room' && currentSegment.id !== this.currentRoomId) {
-      console.log(`${this.name}: Entering ${currentSegment.id}`);
-      this.currentRoomId = currentSegment.id;
-    }
+    // Move along current path
+    if (this.currentPath.length > 1 && this.pathIndex < this.currentPath.length - 1) {
+      const nextWaypoint = this.currentPath[this.pathIndex + 1];
 
-    // Update progress
-    this.progress += deltaTime * this.speed * (this.isWandering ? 0.5 : 1.0); // Slower when wandering
+      // Calculate direction
+      const dx = nextWaypoint.x - this.currentPosition.x;
+      const dz = nextWaypoint.z - this.currentPosition.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
 
-    // Move to next segment if needed
-    if (this.progress >= currentSegment.waypoints.length - 1) {
-      this.currentSegmentIndex++;
-
-      // If reached the end of path
-      if (this.currentSegmentIndex >= this.pathSegments.length) {
-        if (this.isWandering) {
-          // Continue wandering or choose new action
-          if (this.wanderTimer > 0) {
-            this.progress = 0;
-            this.currentSegmentIndex = this.pathSegments.length - 1;
-            return;
+      if (distance < 0.1) {
+        // Reached waypoint, move to next
+        this.pathIndex++;
+        if (this.pathIndex >= this.currentPath.length - 1) {
+          // Reached end of path
+          if (this.currentBehavior.type === BehaviorType.ROAM) {
+            // Choose new roam target
+            this.executeRoamBehavior();
+          } else if (this.currentBehavior.type === BehaviorType.MOVE_TO_TARGET) {
+            // Update current room
+            if (this.currentBehavior.targetRoomId) {
+              this.currentRoomId = this.currentBehavior.targetRoomId;
+            }
+            // Choose new behavior after arrival
+            setTimeout(() => {
+              this.chooseNewBehavior();
+            }, 500);
           }
+        }
+      } else {
+        // Move towards next waypoint
+        const moveDistance = this.speed * deltaTime;
+        const moveRatio = Math.min(moveDistance / distance, 1);
+
+        const newX = this.currentPosition.x + dx * moveRatio;
+        const newZ = this.currentPosition.z + dz * moveRatio;
+        const newPosition = { x: newX, z: newZ };
+
+        // Check if new position is walkable
+        if (this.isPositionWalkable(newPosition)) {
+          this.currentPosition = newPosition;
         } else {
-          // Arrived at destination room
-          this.currentRoomId = this.targetRoomId;
-          console.log(`${this.name}: Arrived at ${this.currentRoomId}`);
+          // Try to find nearest walkable point
+          const walkablePoint = this.getNearestWalkablePoint(newPosition);
+          this.currentPosition = walkablePoint;
         }
 
-        // Brief pause before choosing new action
-        setTimeout(() => {
-          this.chooseNewDestination();
-        }, 500 + Math.random() * 1500); // 0.5-2 second pause
-
-        // Stay at current position
-        this.progress = 0;
-        this.currentSegmentIndex = Math.max(0, this.pathSegments.length - 1);
-        return;
+        // Update current room based on position
+        this.updateCurrentRoom();
       }
+    }
+  }
 
-      this.progress = 0;
-      return;
+  /**
+   * Check if a position is walkable
+   */
+  private isPositionWalkable(position: Vector2): boolean {
+    // Check if in any room
+    for (const room of this.rooms.values()) {
+      if (room.containsPoint(position)) {
+        return room.isWalkable(position);
+      }
     }
 
-    // Calculate current position using interpolation
-    const waypointIndex = Math.floor(this.progress);
-    const t = this.progress - waypointIndex;
+    // Check if in any corridor
+    for (const corridor of this.corridors.values()) {
+      const roomA = this.rooms.get(corridor.roomAId);
+      const roomB = this.rooms.get(corridor.roomBId);
+      if (roomA && roomB && corridor.containsPoint(position, roomA, roomB)) {
+        return corridor.navMesh ? corridor.navMesh.isWalkable(position) : true;
+      }
+    }
 
-    const currentWaypoint = currentSegment.waypoints[waypointIndex];
-    const nextWaypoint = currentSegment.waypoints[waypointIndex + 1];
+    return false;
+  }
 
-    this.currentPosition = {
-      x: currentWaypoint.x + (nextWaypoint.x - currentWaypoint.x) * t,
-      z: currentWaypoint.z + (nextWaypoint.z - currentWaypoint.z) * t,
-    };
+  /**
+   * Get nearest walkable point to a position
+   */
+  private getNearestWalkablePoint(position: Vector2): Vector2 {
+    // Try current room first
+    const currentRoom = this.rooms.get(this.currentRoomId);
+    if (currentRoom && currentRoom.containsPoint(position)) {
+      return currentRoom.getNearestWalkablePoint(position);
+    }
+
+    // Check all rooms
+    for (const room of this.rooms.values()) {
+      if (room.containsPoint(position)) {
+        return room.getNearestWalkablePoint(position);
+      }
+    }
+
+    // Return current position as fallback
+    return this.currentPosition;
+  }
+
+  /**
+   * Update current room based on position
+   */
+  private updateCurrentRoom(): void {
+    for (const room of this.rooms.values()) {
+      if (room.containsPoint(this.currentPosition)) {
+        if (room.id !== this.currentRoomId) {
+          console.log(`${this.name}: Entering ${room.id}`);
+          this.currentRoomId = room.id;
+        }
+        return;
+      }
+    }
   }
 
   /**
@@ -341,10 +466,9 @@ export class Character {
    * Reset to beginning of path
    */
   reset(): void {
-    this.currentSegmentIndex = 0;
-    this.progress = 0;
-    if (this.pathSegments.length > 0 && this.pathSegments[0].waypoints.length > 0) {
-      this.currentPosition = { ...this.pathSegments[0].waypoints[0] };
+    this.pathIndex = 0;
+    if (this.currentPath.length > 0) {
+      this.currentPosition = { ...this.currentPath[0] };
     }
   }
 }

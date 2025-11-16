@@ -11,6 +11,7 @@ import { Room3D } from './Room3D';
 import { Corridor3D } from './Corridor3D';
 import { Character3D } from './Character3D';
 import { MagicParticles } from './Particles3D';
+import { Obstacle3D } from './Obstacle3D';
 
 // Main 3D Scene
 interface MaraudersMap3DProps {
@@ -171,6 +172,17 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           {rooms.map((room) => (
             <Room3D key={room.id} room={room} isActive={isActive} />
           ))}
+
+          {/* Render all obstacles in rooms */}
+          {rooms.map((room) =>
+            room.obstacles.map((obstacle) => (
+              <Obstacle3D
+                key={obstacle.id}
+                obstacle={obstacle}
+                isActive={isActive}
+              />
+            ))
+          )}
 
           {/* Render all characters with animated footsteps */}
           {characters.map((character) => (

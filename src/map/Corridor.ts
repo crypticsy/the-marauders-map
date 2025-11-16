@@ -1,9 +1,10 @@
 import { CorridorConfig, Vector2 } from './types';
 import { Room } from './Room';
+import { NavMeshImpl } from './NavMesh';
 
 /**
  * Corridor class representing a passageway between rooms
- * Handles path generation and rendering of hand-drawn style corridors
+ * Handles path generation, NavMesh, and rendering of hand-drawn style corridors
  */
 export class Corridor {
   public id: string;
@@ -13,6 +14,8 @@ export class Corridor {
   public connectionB: string;
   public width: number;
   private waypoints: Vector2[];
+  public navMesh: NavMeshImpl | null = null;
+  private fullPath: Vector2[] = [];
 
   constructor(config: CorridorConfig) {
     this.id = config.id;
@@ -22,6 +25,50 @@ export class Corridor {
     this.connectionB = config.connectionB;
     this.width = config.width;
     this.waypoints = config.waypoints || [];
+  }
+
+  /**
+   * Initialize corridor NavMesh after rooms are loaded
+   */
+  initializeNavMesh(roomA: Room, roomB: Room): void {
+    this.fullPath = this.generatePath(roomA, roomB);
+
+    // Create NavMesh for corridor with balanced grid size
+    if (this.fullPath.length >= 2) {
+      const bounds = this.getCorridorBounds();
+      this.navMesh = new NavMeshImpl(bounds, [], 0.25); // Coarser grid for corridors - less nodes, faster pathfinding
+    }
+  }
+
+  /**
+   * Get corridor bounds for NavMesh generation
+   * Creates generous bounds to ensure overlap with room connection points
+   */
+  private getCorridorBounds(): { min: Vector2; max: Vector2 } {
+    if (this.fullPath.length === 0) {
+      return { min: { x: 0, z: 0 }, max: { x: 0, z: 0 } };
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    this.fullPath.forEach((point) => {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minZ = Math.min(minZ, point.z);
+      maxZ = Math.max(maxZ, point.z);
+    });
+
+    // Use generous padding to ensure overlap with room doorways
+    // This ensures smooth transitions between rooms and corridors
+    const padding = this.width * 1.5;
+
+    return {
+      min: { x: minX - padding, z: minZ - padding },
+      max: { x: maxX + padding, z: maxZ + padding },
+    };
   }
 
   /**
@@ -67,6 +114,23 @@ export class Corridor {
     }
 
     return false;
+  }
+
+  /**
+   * Check if a point is walkable in the corridor
+   */
+  isWalkable(point: Vector2, roomA: Room, roomB: Room): boolean {
+    if (!this.containsPoint(point, roomA, roomB)) {
+      return false;
+    }
+    return this.navMesh ? this.navMesh.isWalkable(point) : false;
+  }
+
+  /**
+   * Get nearest walkable point in corridor
+   */
+  getNearestWalkablePoint(point: Vector2): Vector2 {
+    return this.navMesh ? this.navMesh.getNearestWalkablePoint(point) : point;
   }
 
   /**

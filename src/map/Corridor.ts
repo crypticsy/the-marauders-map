@@ -33,10 +33,10 @@ export class Corridor {
   initializeNavMesh(roomA: Room, roomB: Room): void {
     this.fullPath = this.generatePath(roomA, roomB);
 
-    // Create NavMesh for corridor with fine grid for better pathfinding
+    // Create NavMesh for corridor with fine grid for straight segment pathfinding
     if (this.fullPath.length >= 2) {
       const bounds = this.getCorridorBounds();
-      this.navMesh = new NavMeshImpl(bounds, [], 0.2); // Finer grid to handle curved corridors
+      this.navMesh = new NavMeshImpl(bounds, [], 0.2); // Fine grid for straight corridors
     }
   }
 
@@ -61,9 +61,9 @@ export class Corridor {
       maxZ = Math.max(maxZ, point.z);
     });
 
-    // Use very generous padding to ensure curved paths are fully covered
-    // This ensures smooth transitions and full coverage of curved corridors
-    const padding = this.width * 2.0;
+    // Use generous padding to ensure straight segment paths are fully covered
+    // This ensures smooth transitions at bends between segments
+    const padding = this.width * 1.5;
 
     return {
       min: { x: minX - padding, z: minZ - padding },
@@ -102,7 +102,7 @@ export class Corridor {
     const path = this.generatePath(roomA, roomB);
     const halfWidth = this.width / 2;
 
-    // Check if point is near any segment of the corridor
+    // Check if point is near any straight segment of the corridor
     for (let i = 0; i < path.length - 1; i++) {
       const segmentStart = path[i];
       const segmentEnd = path[i + 1];

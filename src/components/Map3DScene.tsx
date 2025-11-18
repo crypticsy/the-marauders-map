@@ -1,6 +1,6 @@
 import React, { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Html } from '@react-three/drei';
 import { IoCloseCircleOutline } from 'react-icons/io5';
 import * as THREE from 'three';
 import { Room } from '../map/Room';
@@ -12,6 +12,64 @@ import { Corridor3D } from './Corridor3D';
 import { Character3D } from './Character3D';
 import { MagicParticles } from './Particles3D';
 import { Obstacle3D } from './Obstacle3D';
+
+// Loading Animation Component
+const MapLoadingAnimation = () => {
+  return (
+    <Html center>
+      <div className="flex flex-col items-center justify-center gap-6 p-8">
+        {/* Animated Footsteps */}
+        <div className="relative w-48 h-32">
+          {/* Left footsteps */}
+          <div className="footstep-left absolute" style={{ left: '20%', top: '0%' }}>
+            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
+              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
+              <circle cx="10" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="14" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="18" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="22" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
+            </svg>
+          </div>
+          <div className="footstep-right absolute" style={{ right: '20%', top: '20%' }}>
+            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
+              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
+              <circle cx="20" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="16" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="12" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="8" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
+            </svg>
+          </div>
+          <div className="footstep-left absolute" style={{ left: '25%', top: '40%' }}>
+            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
+              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
+              <circle cx="10" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="14" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="18" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="22" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
+            </svg>
+          </div>
+          <div className="footstep-right absolute" style={{ right: '25%', top: '60%' }}>
+            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
+              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
+              <circle cx="20" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="16" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="12" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
+              <circle cx="8" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* Loading Text */}
+        <p
+          className="text-lg md:text-xl text-black/70 italic animate-pulse"
+          style={{ fontFamily: "'IM Fell English', serif" }}
+        >
+          The map is revealing itself...
+        </p>
+      </div>
+    </Html>
+  );
+};
 
 // Main 3D Scene
 interface MaraudersMap3DProps {
@@ -121,16 +179,16 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
 
       {/* 3D Canvas */}
       <Canvas shadows>
-        <Suspense fallback={null}>
-          <PerspectiveCamera makeDefault position={[0, 25, 25]} fov={50} />
+        <Suspense fallback={<MapLoadingAnimation />}>
+          <PerspectiveCamera makeDefault position={[0, 85, 85]} fov={60} />
           <OrbitControls
             enablePan={true}
             enableZoom={true}
             enableRotate={true}
             maxPolarAngle={Math.PI / 2.1}
             minPolarAngle={Math.PI / 6}
-            minDistance={10}
-            maxDistance={80}
+            minDistance={15}
+            maxDistance={120}
           />
 
           {/* Lighting - Bright and clean */}
@@ -141,7 +199,7 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
 
           {/* Modern minimal map base - clean plain surface */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-            <planeGeometry args={[50, 50]} />
+            <planeGeometry args={[100, 100]} />
             <meshStandardMaterial
               map={parchmentTexture}
               color="#d9cab3"
@@ -212,6 +270,44 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 70%);
           border-radius: 50%;
           animation: inkBlotExpand 2s ease-out forwards;
+        }
+
+        @keyframes footstepAppear {
+          0% {
+            opacity: 0;
+            transform: scale(0.5);
+          }
+          50% {
+            opacity: 0.8;
+          }
+          100% {
+            opacity: 0.6;
+            transform: scale(1);
+          }
+        }
+
+        .footstep-left {
+          animation: footstepAppear 0.8s ease-out forwards;
+        }
+
+        .footstep-left:nth-child(1) {
+          animation-delay: 0s;
+        }
+
+        .footstep-right:nth-child(2) {
+          animation-delay: 0.3s;
+        }
+
+        .footstep-left:nth-child(3) {
+          animation-delay: 0.6s;
+        }
+
+        .footstep-right:nth-child(4) {
+          animation-delay: 0.9s;
+        }
+
+        .footstep-right {
+          animation: footstepAppear 0.8s ease-out forwards;
         }
       `}</style>
     </div>

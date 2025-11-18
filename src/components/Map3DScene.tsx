@@ -1,5 +1,5 @@
-import React, { Suspense, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useMemo, useState, useRef, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Html } from '@react-three/drei';
 import { IoCloseCircleOutline } from 'react-icons/io5';
 import * as THREE from 'three';
@@ -12,6 +12,61 @@ import { Corridor3D } from './Corridor3D';
 import { Character3D } from './Character3D';
 import { MagicParticles } from './Particles3D';
 import { Obstacle3D } from './Obstacle3D';
+
+// Camera Follow Component
+interface CameraFollowProps {
+  character: Character | null;
+  controlsRef: React.MutableRefObject<any>;
+}
+
+const CameraFollow: React.FC<CameraFollowProps> = ({ character, controlsRef }) => {
+  const { camera } = useThree();
+  const isResettingRef = useRef(false);
+  const previousCharacterRef = useRef<Character | null>(null);
+
+  useFrame(() => {
+    if (controlsRef.current) {
+      if (character) {
+        // Follow character mode
+        const pos = character.getPosition2D();
+        const targetPos = new THREE.Vector3(pos.x, 0, pos.z);
+
+        // Smoothly move camera target to character position
+        const currentTarget = controlsRef.current.target;
+        currentTarget.lerp(targetPos, 0.05);
+
+        // Update camera position to maintain viewing angle
+        const offset = new THREE.Vector3(0, 15, 15);
+        const cameraTarget = new THREE.Vector3().copy(currentTarget).add(offset);
+        camera.position.lerp(cameraTarget, 0.05);
+
+        controlsRef.current.update();
+        previousCharacterRef.current = character;
+        isResettingRef.current = false;
+      } else if (previousCharacterRef.current !== null && !isResettingRef.current) {
+        // Just switched to Overview mode - reset once
+        const defaultTarget = new THREE.Vector3(0, 0, 0);
+        const defaultCameraPos = new THREE.Vector3(0, 85, 85);
+
+        // Check if we're close enough to default position
+        const distanceToDefault = camera.position.distanceTo(defaultCameraPos);
+        if (distanceToDefault > 0.5) {
+          // Still resetting - smoothly return to default view
+          const currentTarget = controlsRef.current.target;
+          currentTarget.lerp(defaultTarget, 0.05);
+          camera.position.lerp(defaultCameraPos, 0.05);
+          controlsRef.current.update();
+        } else {
+          // Reset complete - allow free camera control
+          isResettingRef.current = true;
+          previousCharacterRef.current = null;
+        }
+      }
+    }
+  });
+
+  return null;
+};
 
 // Loading Animation Component
 const MapLoadingAnimation = () => {
@@ -79,6 +134,9 @@ interface MaraudersMap3DProps {
 }
 
 export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClosing, onClose }) => {
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const controlsRef = useRef<any>(null);
+
   // Load old paper texture from local assets
   const parchmentTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
@@ -124,6 +182,11 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
     return map;
   }, [rooms]);
 
+  // Get selected character for camera following
+  const selectedCharacter = selectedCharacterId
+    ? characters.find(c => c.id === selectedCharacterId) || null
+    : null;
+
   return (
     <div className="w-screen h-screen bg-[#e8dcc4] parchment-texture overflow-hidden relative">
       {/* Magical ink blot effect when closing */}
@@ -154,6 +217,64 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           <span className="xs:hidden sm:hidden">Close</span>
         </button>
 
+        {/* Character Selector - left side */}
+        <div className="absolute top-3 sm:top-4 md:top-6 left-3 sm:left-4 md:left-6 z-50">
+          <div className="relative">
+            {/* Selected value display */}
+            <button
+              onClick={() => {
+                const dropdown = document.getElementById('character-dropdown');
+                if (dropdown) {
+                  dropdown.classList.toggle('hidden');
+                }
+              }}
+              className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 bg-black/90 backdrop-blur-sm rounded text-[#e8dcc4] shadow-xl text-2xs sm:text-xs md:text-sm cursor-pointer border-0 outline-none focus:outline-none focus:ring-0 hover:scale-105 transition-transform whitespace-nowrap"
+              style={{
+                fontFamily: "'IM Fell English', serif",
+                letterSpacing: '0.05em',
+              }}
+            >
+              {selectedCharacterId
+                ? `Follow ${characters.find(c => c.id === selectedCharacterId)?.name}`
+                : 'Overview'}
+              <span className="ml-2">▼</span>
+            </button>
+
+            {/* Dropdown options */}
+            <div
+              id="character-dropdown"
+              className="hidden absolute top-full left-0 mt-1 bg-black/90 backdrop-blur-sm rounded shadow-xl overflow-y-auto border-0"
+              style={{
+                maxHeight: 'calc(2.5rem * 4)',
+                fontFamily: "'IM Fell English', serif",
+                letterSpacing: '0.05em',
+              }}
+            >
+              <div
+                onClick={() => {
+                  setSelectedCharacterId(null);
+                  document.getElementById('character-dropdown')?.classList.add('hidden');
+                }}
+                className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 text-[#e8dcc4] cursor-pointer hover:bg-black/50 text-2xs sm:text-xs md:text-sm whitespace-nowrap"
+              >
+                Overview
+              </div>
+              {characters.map((char) => (
+                <div
+                  key={char.id}
+                  onClick={() => {
+                    setSelectedCharacterId(char.id);
+                    document.getElementById('character-dropdown')?.classList.add('hidden');
+                  }}
+                  className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 text-[#e8dcc4] cursor-pointer hover:bg-black/50 text-2xs sm:text-xs md:text-sm whitespace-nowrap"
+                >
+                  Follow {char.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Title with decorative elements - mobile responsive */}
         <div className="absolute top-3 sm:top-4 md:top-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none px-2 sm:px-4 w-full max-w-xs sm:max-w-md md:max-w-lg">
           <div className="text-center relative">
@@ -166,22 +287,12 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           </div>
         </div>
 
-      {/* Instructions hint - mobile responsive */}
-      <div className="absolute bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none px-2 sm:px-4 max-w-xs sm:max-w-md">
-        <p
-          className="text-3xs sm:text-2xs md:text-xs text-black/40 text-center italic leading-tight"
-          style={{ fontFamily: "'Shadows Into Light', cursive" }}
-        >
-          <span className="hidden sm:inline">Drag to rotate • Scroll to zoom • Click rooms to explore</span>
-          <span className="sm:hidden">Drag • Pinch • Tap</span>
-        </p>
-      </div>
-
       {/* 3D Canvas */}
       <Canvas shadows>
         <Suspense fallback={<MapLoadingAnimation />}>
           <PerspectiveCamera makeDefault position={[0, 85, 85]} fov={60} />
           <OrbitControls
+            ref={controlsRef}
             enablePan={true}
             enableZoom={true}
             enableRotate={true}
@@ -190,6 +301,9 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
             minDistance={15}
             maxDistance={120}
           />
+
+          {/* Camera follow for selected character */}
+          <CameraFollow character={selectedCharacter} controlsRef={controlsRef} />
 
           {/* Lighting - Bright and clean */}
           <ambientLight intensity={0.4} />
@@ -253,6 +367,25 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
       </div>
 
       <style>{`
+        /* Custom scrollbar for dropdown */
+        #character-dropdown::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        #character-dropdown::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 3px;
+        }
+
+        #character-dropdown::-webkit-scrollbar-thumb {
+          background: rgba(232, 220, 196, 0.5);
+          border-radius: 3px;
+        }
+
+        #character-dropdown::-webkit-scrollbar-thumb:hover {
+          background: rgba(232, 220, 196, 0.7);
+        }
+
         @keyframes inkBlotExpand {
           0% {
             transform: scale(0);

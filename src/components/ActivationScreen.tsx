@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { IoFootsteps } from "react-icons/io5";
+import { IoFootsteps, IoBulb } from "react-icons/io5";
 import { FaWandMagicSparkles } from "react-icons/fa6";
 import { IoSparkles } from "react-icons/io5";
 import { Toaster } from "react-hot-toast";
@@ -14,10 +14,14 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
 }) => {
   const [phrase, setPhrase] = useState("");
   const [isActivating, setIsActivating] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const { showToast } = useCustomToast();
   const correctPhrases = [
     "i solemnly swear that i am up to no good",
-    "i solemnly swear that i am upto no good"
+    "i solemnly swear that i am up to no good.",
+    '“i solemnly swear that i am up to no good."',
+    "i solemnly swear that i am upto no good",
+    "i solemnly swear that i am upto no good."
   ];
 
   // Array of error messages
@@ -188,7 +192,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
                 value={phrase}
                 onChange={(e) => setPhrase(e.target.value)}
                 placeholder="Enter Your Incantation"
-                className="w-full px-6 py-4 bg-transparent border-2 border-black/10 border-dashed rounded text-center text-black placeholder-black/40 focus:outline-none focus:border-black/60 transition-all shadow-inner"
+                className="w-full px-6 py-4 bg-transparent rounded-xl border-2 border-black/10 border-dashed text-center text-black placeholder-black/40 focus:outline-none focus:border-black/60 transition-all shadow-inner"
                 style={{
                   fontFamily: "'Shadows Into Light', cursive",
                   fontSize: "1.1rem",
@@ -200,7 +204,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
 
             <button
               type="submit"
-              className={`w-full py-4 border-2 rounded transition-all hover:shadow-xl relative overflow-hidden flex items-center justify-center gap-2 ${
+              className={`w-full py-4 border-2 transition-all hover:shadow-xl relative overflow-hidden flex items-center justify-center gap-2 rounded-xl ${
                 isPhraseCorrect
                   ? "bg-black/90 hover:bg-black border-black/90 text-[#e8dcc4]"
                   : "bg-transparent hover:bg-black/5 border-black/30 text-black"
@@ -217,7 +221,6 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
               )}
               {isPhraseCorrect ? (
                 <>
-                  <IoSparkles className="text-xl relative z-10" />
                   <span className="relative z-10">Reveal the Map</span>
                   <IoSparkles className="text-xl relative z-10" />
                 </>
@@ -230,14 +233,16 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
             </button>
           </form>
 
-          {/* Hint */}
+          {/* Hint button */}
           <div className="mt-6 text-center">
-            <p
-              className="text-xs text-black/50"
-              style={{ fontFamily:  "'IM Fell English', serif"}}
+            <button
+              onClick={() => setShowInstructions(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-black/90 backdrop-blur-sm rounded-full text-[#e8dcc4] shadow-xl hover:scale-105 transition-transform text-xs sm:text-sm"
+              style={{ fontFamily: "'IM Fell English', serif" }}
             >
-              Hint: “I solemnly swear that I am up to no good"
-            </p>
+              <IoBulb className="text-base sm:text-lg" />
+              <span>Hint</span>
+            </button>
           </div>
 
           {/* Bottom decorative line */}
@@ -251,9 +256,71 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
         </div>
       </div>
 
+      {/* Instructions Modal */}
+      {showInstructions && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowInstructions(false)}
+        >
+          <div
+            className="bg-[#e8dcc4] p-6 sm:p-8 md:p-12 rounded-lg shadow-2xl max-w-md sm:max-w-lg md:max-w-2xl mx-4 parchment-texture"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-4 sm:space-y-6">
+              <p
+                className="text-sm sm:text-base md:text-lg text-black/80 leading-relaxed"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                Fred tapped the blank parchment with his wand.
+              </p>
+              <p
+                className="text-sm sm:text-base md:text-lg text-black/80 leading-relaxed"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                “Watch closely," he said, lowering his voice.
+              </p>
+              <p
+                className="text-base sm:text-lg md:text-xl text-black font-semibold leading-relaxed px-4 py-3 bg-amber-100/50 rounded border-l-4 border-amber-600"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                “I solemnly swear that I am up to no good."
+              </p>
+              <p
+                className="text-sm sm:text-base md:text-lg text-black/80 leading-relaxed"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                As he spoke the words, the parchment reacted at once, ink threading outward until a detailed map spread across the page.
+              </p>
+              <p
+                className="text-sm sm:text-base md:text-lg text-black/80 leading-relaxed"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                George grinned at Harry. “And when you're done with it," he said, “mischief managed."
+              </p>
+              <p
+                className="text-sm sm:text-base md:text-lg text-black/80 leading-relaxed"
+                style={{ fontFamily: "'IM Fell English', serif" }}
+              >
+                He touched his wand to the parchment again and gave a crisp command. The ink retreated instantly, leaving the parchment empty once more.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowInstructions(false)}
+              className="mt-6 sm:mt-8 w-full px-4 py-2 sm:px-6 sm:py-3 bg-black/90 hover:bg-black backdrop-blur-sm rounded text-[#e8dcc4] hover:scale-105 transition-all shadow-xl text-sm sm:text-base"
+              style={{
+                fontFamily: "'IM Fell English', serif",
+                letterSpacing: '0.05em',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div
-        className={`absolute bottom-0 left-0 right-0 pb-4 sm:pb-6 
+        className={`absolute bottom-0 left-0 right-0 pb-4 sm:pb-6
           ${isActivating ? "opacity-0 scale-110" : "opacity-100"} `}
       >
         <p

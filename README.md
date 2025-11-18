@@ -8,7 +8,7 @@ I’ve always thought the Marauder’s Map in Harry Potter was the coolest thing
 
 <br/>
 <div align="center" style="flex-direction: column;">
-  <img src="./public/main_screen.png" alt="System Demo" width="100%"/>
+  <img src="./public/demo.gif" alt="System Demo" width="100%"/>
   <div style="font-size: 0.8em; color: gray;">Home Screen</div>
 </div>
 

@@ -68,64 +68,6 @@ const CameraFollow: React.FC<CameraFollowProps> = ({ character, controlsRef }) =
   return null;
 };
 
-// Loading Animation Component
-const MapLoadingAnimation = () => {
-  return (
-    <Html center>
-      <div className="flex flex-col items-center justify-center gap-6 p-8">
-        {/* Animated Footsteps */}
-        <div className="relative w-48 h-32">
-          {/* Left footsteps */}
-          <div className="footstep-left absolute" style={{ left: '20%', top: '0%' }}>
-            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
-              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
-              <circle cx="10" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="14" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="18" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="22" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
-            </svg>
-          </div>
-          <div className="footstep-right absolute" style={{ right: '20%', top: '20%' }}>
-            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
-              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
-              <circle cx="20" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="16" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="12" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="8" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
-            </svg>
-          </div>
-          <div className="footstep-left absolute" style={{ left: '25%', top: '40%' }}>
-            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
-              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
-              <circle cx="10" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="14" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="18" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="22" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
-            </svg>
-          </div>
-          <div className="footstep-right absolute" style={{ right: '25%', top: '60%' }}>
-            <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
-              <ellipse cx="15" cy="32" rx="8" ry="5" fill="#3d2817" opacity="0.6"/>
-              <circle cx="20" cy="20" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="16" cy="18" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="12" cy="17" r="3" fill="#3d2817" opacity="0.6"/>
-              <circle cx="8" cy="19" r="3" fill="#3d2817" opacity="0.6"/>
-            </svg>
-          </div>
-        </div>
-
-        {/* Loading Text */}
-        <p
-          className="text-lg md:text-xl text-black/70 italic animate-pulse"
-          style={{ fontFamily: "'IM Fell English', serif" }}
-        >
-          The map is revealing itself...
-        </p>
-      </div>
-    </Html>
-  );
-};
-
 // Main 3D Scene
 interface MaraudersMap3DProps {
   isActive: boolean;
@@ -276,7 +218,7 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
         </div>
 
         {/* Title with decorative elements - mobile responsive */}
-        <div className="absolute top-3 sm:top-4 md:top-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none px-2 sm:px-4 w-full max-w-xs sm:max-w-md md:max-w-lg">
+        <div className="absolute top-[8vh] md:top-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none px-2 sm:px-4 w-full max-w-xs sm:max-w-md md:max-w-lg">
           <div className="text-center relative">
             <h1
               className="text-base sm:text-xl md:text-2xl lg:text-3xl text-black tracking-wider leading-tight"
@@ -289,7 +231,7 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
 
       {/* 3D Canvas */}
       <Canvas shadows>
-        <Suspense fallback={<MapLoadingAnimation />}>
+        <Suspense>
           <PerspectiveCamera makeDefault position={[0, 85, 85]} fov={60} />
           <OrbitControls
             ref={controlsRef}

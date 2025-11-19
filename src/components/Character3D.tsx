@@ -63,9 +63,14 @@ const createFootprintTexture = (): THREE.Texture => {
  */
 export const Character3D: React.FC<Character3DProps> = ({ character, isActive }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const [footstepToggle, setFootstepToggle] = useState(false);
   const [stepTimer, setStepTimer] = useState(0);
   const [previousPositions, setPreviousPositions] = useState<Array<{x: number, z: number, rotation: number, time: number}>>([]);
+  const [currentRotation, setCurrentRotation] = useState(0);
+
+  // Failsafe for genuinely stuck characters (not resting)
+  const lastMoveTimeRef = useRef<number>(0);
+  const stuckCheckPositionRef = useRef<{x: number, z: number} | null>(null);
+  const hasAttemptedMovementRef = useRef<boolean>(false);
 
   // Create footprint texture once using useMemo (must be before conditional return!)
   const footprintTexture = useMemo(() => createFootprintTexture(), []);
@@ -82,9 +87,45 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
         Math.pow(newPos.z - oldPos.z, 2)
       );
 
-      // Add footstep every 0.5 units traveled
+      // Track if character is attempting to move (not just resting)
+      if (distance > 0.001) {
+        hasAttemptedMovementRef.current = true;
+      }
+
+      // Update current rotation when moving to know which direction to face
+      if (distance > 0.01) {
+        const angle = Math.atan2(newPos.z - oldPos.z, newPos.x - oldPos.x);
+        setCurrentRotation(angle);
+      }
+
+      // Failsafe: Check if character is genuinely stuck (trying to move but can't)
+      if (!stuckCheckPositionRef.current) {
+        stuckCheckPositionRef.current = { ...newPos };
+        lastMoveTimeRef.current = state.clock.elapsedTime;
+      } else {
+        const stuckDistance = Math.sqrt(
+          Math.pow(newPos.x - stuckCheckPositionRef.current.x, 2) +
+          Math.pow(newPos.z - stuckCheckPositionRef.current.z, 2)
+        );
+
+        // If character has made progress, update check position
+        if (stuckDistance > 0.5) {
+          stuckCheckPositionRef.current = { ...newPos };
+          lastMoveTimeRef.current = state.clock.elapsedTime;
+          hasAttemptedMovementRef.current = false;
+        }
+        // Only reset if they've tried to move but haven't made progress (stuck in wall)
+        else if (hasAttemptedMovementRef.current && state.clock.elapsedTime - lastMoveTimeRef.current > 8) {
+          console.log(`${character.name} is stuck in wall! Resetting...`);
+          character.reset();
+          stuckCheckPositionRef.current = null;
+          hasAttemptedMovementRef.current = false;
+        }
+      }
+
+      // Add footstep every 0.2 units traveled (only if actually moving)
       const newStepTimer = stepTimer + distance;
-      if (newStepTimer > 0.5) {
+      if (newStepTimer > 0.2 && distance > 0.01) {
         // Calculate rotation based on movement direction
         const angle = Math.atan2(newPos.z - oldPos.z, newPos.x - oldPos.x);
 
@@ -95,11 +136,10 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
             rotation: angle,
             time: state.clock.elapsedTime
           }];
-          // Keep only last 8 footsteps
-          return updated.slice(-8);
+          // Keep only last 5 footsteps for better trail
+          return updated.slice(-5);
         });
 
-        setFootstepToggle(!footstepToggle);
         setStepTimer(0);
       } else {
         setStepTimer(newStepTimer);
@@ -111,14 +151,20 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
 
   const pos = character.getPosition3D(0.05);
 
+  // Use the most recent trail rotation for current position, or fallback to currentRotation
+  const displayRotation = previousPositions.length > 0
+    ? previousPositions[previousPositions.length - 1].rotation
+    : currentRotation;
+
   return (
     <group ref={groupRef}>
-      {/* Render trail of footsteps - using texture on planes */}
+      {/* Render trail of footsteps - always facing movement direction */}
       {previousPositions.map((step, index) => {
         const age = previousPositions.length - index;
-        const opacity = Math.max(0.2, 0.85 - age * 0.1);
+        // Better fade gradient: newest (0.85) -> oldest (0.15)
+        const opacity = Math.max(0.15, 0.85 - age * 0.14);
         const isLeft = index % 2 === 0;
-        const offsetX = isLeft ? -0.15 : 0.15;
+        const offsetX = isLeft ? -0.25 : 0.25;
 
         return (
           <mesh
@@ -130,7 +176,7 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
             ]}
             rotation={[-Math.PI / 2, 0, isLeft ? step.rotation + Math.PI / 2 : step.rotation - Math.PI / 2]}
           >
-            <planeGeometry args={[0.3, 0.6]} />
+            <planeGeometry args={[0.5, 1.0]} />
             <meshBasicMaterial
               map={footprintTexture}
               transparent
@@ -142,37 +188,46 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
         );
       })}
 
-      {/* Current position - two shoe stamps */}
-      <group position={[pos.x, 0.08, pos.z]}>
-        {/* Left shoe */}
-        <mesh
-          position={[-0.18, 0, 0]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[0.3, 0.6]} />
-          <meshBasicMaterial
-            map={footprintTexture}
-            transparent
-            opacity={0.9}
-            depthWrite={false}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
+      {/* Current position - two shoe stamps facing movement direction (matching trail exactly) */}
+      {/* Left shoe */}
+      <mesh
+        position={[
+          pos.x + Math.cos(displayRotation + Math.PI / 2) * -0.25,
+          0.08,
+          pos.z + Math.sin(displayRotation + Math.PI / 2) * -0.25
+        ]}
+        rotation={[-Math.PI / 2, 0, displayRotation + Math.PI / 2]}
+      >
+        <planeGeometry args={[0.5, 1.0]} />
+        <meshBasicMaterial
+          map={footprintTexture}
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
 
-        {/* Right shoe */}
-        <mesh
-          position={[0.18, 0, 0]}
-          rotation={[-Math.PI / 2, 0, Math.PI]}
-        >
-          <planeGeometry args={[0.3, 0.6]} />
-          <meshBasicMaterial
-            map={footprintTexture}
-            transparent
-            opacity={0.9}
-            depthWrite={false}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
+      {/* Right shoe */}
+      <mesh
+        position={[
+          pos.x + Math.cos(displayRotation + Math.PI / 2) * 0.25,
+          0.08,
+          pos.z + Math.sin(displayRotation + Math.PI / 2) * 0.25
+        ]}
+        rotation={[-Math.PI / 2, 0, displayRotation - Math.PI / 2]}
+      >
+        <planeGeometry args={[0.5, 1.0]} />
+        <meshBasicMaterial
+          map={footprintTexture}
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      <group position={[pos.x, 0.08, pos.z]}>
 
         {/* Character name label - still use character color for identification */}
         <Text

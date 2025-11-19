@@ -10,10 +10,10 @@ const MapLoadingScreen = () => {
       <div className="flex flex-col items-center justify-center gap-8">
         {/* Animated Footsteps */}
         <div className="relative w-64 h-32">
-          <IoFootsteps className="footstep absolute text-6xl text-[#3d2817] opacity-0" style={{ left: '10%', top: '10%', transform: 'rotate(-15deg)' }} />
-          <IoFootsteps className="footstep absolute text-6xl text-[#3d2817] opacity-0" style={{ right: '15%', top: '30%', transform: 'rotate(15deg)' }} />
-          <IoFootsteps className="footstep absolute text-6xl text-[#3d2817] opacity-0" style={{ left: '20%', top: '50%', transform: 'rotate(-10deg)' }} />
-          <IoFootsteps className="footstep absolute text-6xl text-[#3d2817] opacity-0" style={{ right: '20%', top: '70%', transform: 'rotate(10deg)' }} />
+          <IoFootsteps className="footstep absolute text-5xl text-[#3d2817] opacity-0" style={{ left: '10%', top: '10%', transform: 'rotate(-15deg)' }} />
+          <IoFootsteps className="footstep absolute text-5xl text-[#3d2817] opacity-0" style={{ right: '15%', top: '30%', transform: 'rotate(15deg)' }} />
+          <IoFootsteps className="footstep absolute text-5xl text-[#3d2817] opacity-0" style={{ left: '20%', top: '50%', transform: 'rotate(-10deg)' }} />
+          <IoFootsteps className="footstep absolute text-5xl text-[#3d2817] opacity-0" style={{ right: '20%', top: '70%', transform: 'rotate(10deg)' }} />
         </div>
 
         {/* Loading Text */}
@@ -45,22 +45,22 @@ const MapLoadingScreen = () => {
         }
 
         .footstep:nth-child(1) {
-          animation-delay: 0s;
+          animation-delay: 0.9s;
           --rotation: -15deg;
         }
 
         .footstep:nth-child(2) {
-          animation-delay: 0.3s;
+          animation-delay: 0.6s;
           --rotation: 15deg;
         }
 
         .footstep:nth-child(3) {
-          animation-delay: 0.6s;
+          animation-delay: 0.3s;
           --rotation: -10deg;
         }
 
         .footstep:nth-child(4) {
-          animation-delay: 0.9s;
+          animation-delay: 0s;
           --rotation: 10deg;
         }
       `}</style>

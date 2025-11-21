@@ -114,6 +114,7 @@ export const Corridor3D: React.FC<Corridor3DProps> = ({
           key={`floor-${index}`}
           position={[segment.midPoint.x, 0.02, segment.midPoint.z]}
           rotation={[-Math.PI / 2, 0, segment.rotation]}
+          castShadow
           receiveShadow
         >
           <planeGeometry args={[segment.length, corridor.width]} />
@@ -146,6 +147,7 @@ export const Corridor3D: React.FC<Corridor3DProps> = ({
               ]}
               rotation={[0, segment.rotation, 0]}
               castShadow
+              receiveShadow
             >
               <planeGeometry args={[segment.length, wallHeight]} />
               <meshStandardMaterial
@@ -165,6 +167,7 @@ export const Corridor3D: React.FC<Corridor3DProps> = ({
               ]}
               rotation={[0, segment.rotation + Math.PI, 0]}
               castShadow
+              receiveShadow
             >
               <planeGeometry args={[segment.length, wallHeight]} />
               <meshStandardMaterial

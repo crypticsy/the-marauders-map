@@ -43,7 +43,7 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
   return (
     <group position={[x, y, z]}>
       {/* Floor - visible base */}
-      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <planeGeometry args={[width, depth]} />
         <meshStandardMaterial
           color={inkColor}
@@ -68,7 +68,7 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
         onPointerOut={() => setHovered(false)}
       >
         {/* North Wall */}
-        <mesh position={[0, height / 2, -depth / 2]} castShadow>
+        <mesh position={[0, height / 2, -depth / 2]} castShadow receiveShadow>
           <planeGeometry args={[width, height]} />
           <meshStandardMaterial
             color={inkColor}
@@ -79,7 +79,7 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
         </mesh>
 
         {/* South Wall */}
-        <mesh position={[0, height / 2, depth / 2]} rotation={[0, Math.PI, 0]} castShadow>
+        <mesh position={[0, height / 2, depth / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
           <planeGeometry args={[width, height]} />
           <meshStandardMaterial
             color={inkColor}
@@ -90,7 +90,7 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
         </mesh>
 
         {/* East Wall */}
-        <mesh position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow>
+        <mesh position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow receiveShadow>
           <planeGeometry args={[depth, height]} />
           <meshStandardMaterial
             color={inkColor}
@@ -101,7 +101,7 @@ export const Room3D: React.FC<Room3DProps> = ({ room, isActive }) => {
         </mesh>
 
         {/* West Wall */}
-        <mesh position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]} castShadow>
+        <mesh position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <planeGeometry args={[depth, height]} />
           <meshStandardMaterial
             color={inkColor}

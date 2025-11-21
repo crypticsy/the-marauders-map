@@ -1,7 +1,7 @@
 import React, { Suspense, useMemo, useState, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import { IoCloseCircleOutline, IoFootsteps } from 'react-icons/io5';
+import { IoCloseCircleOutline, IoFootsteps, IoInformationCircleOutline } from 'react-icons/io5';
 import * as THREE from 'three';
 import { Room } from '../map/Room';
 import { Corridor } from '../map/Corridor';
@@ -176,16 +176,6 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
   const [playerCharacter, setPlayerCharacter] = useState<PlayerCharacter | null>(null);
   const controlsRef = useRef<any>(null);
 
-  // Load old paper texture from local assets
-  const parchmentTexture = useMemo(() => {
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load(`${import.meta.env.BASE_URL}textures/old-paper.jpg`);
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    // No repeat - texture covers the entire map once
-    return texture;
-  }, []);
-
   // Initialize map objects
   const { rooms, corridors, characters } = useMemo(() => {
     // Create room instances
@@ -282,18 +272,18 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
               {/* WASD Layout */}
               <div className="flex flex-col items-center gap-1">
                 <div className="flex justify-center">
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
                     W
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
                     A
                   </div>
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
                     S
                   </div>
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center font-mono text-xs sm:text-sm font-semibold">
                     D
                   </div>
                 </div>
@@ -304,18 +294,18 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
               {/* Arrow Keys Layout */}
               <div className="flex flex-col items-center gap-1">
                 <div className="flex justify-center">
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center text-sm sm:text-base">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center text-sm sm:text-base">
                     ↑
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center text-sm sm:text-base">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center text-sm sm:text-base">
                     ←
                   </div>
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center text-sm sm:text-base">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center text-sm sm:text-base">
                     ↓
                   </div>
-                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-black/40 rounded flex items-center justify-center text-sm sm:text-base">
+                  <div className="w-5 h-5 sm:w-8 sm:h-8 bg-white/10 rounded flex items-center justify-center text-sm sm:text-base">
                     →
                   </div>
                 </div>
@@ -329,21 +319,21 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           {/* Mischief Managed button */}
           <button
             onClick={onClose}
-            className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 bg-black/90 hover:bg-black backdrop-blur-sm border-2 border-black/90 rounded text-[#e8dcc4] transition-all shadow-xl flex items-center justify-center gap-1 sm:gap-2 hover:scale-105 text-2xs sm:text-xs md:text-sm w-full"
+            className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 bg-black/90 hover:bg-black backdrop-blur-sm border-2 border-black/90 rounded text-[#e8dcc4] transition-all shadow-xl flex items-center justify-between gap-4 sm:gap-3 hover:scale-105 text-2xs sm:text-xs md:text-sm w-full"
             style={{
               fontFamily: "'IM Fell English', serif",
               letterSpacing: '0.05em',
             }}
           >
-            <IoCloseCircleOutline className="text-base sm:text-lg md:text-xl" />
             <span className="hidden xs:inline sm:inline">Mischief Managed</span>
             <span className="xs:hidden sm:hidden">Close</span>
+            <IoCloseCircleOutline className="text-base sm:text-lg md:text-xl" />
           </button>
 
           {/* Player Mode Button */}
           <button
             onClick={handleTogglePlayerMode}
-            className={`px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 backdrop-blur-sm border-2 rounded shadow-xl flex items-center justify-center gap-1 sm:gap-2 hover:scale-105 transition-all text-2xs sm:text-xs md:text-sm w-full ${
+            className={`px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 backdrop-blur-sm border-2 rounded shadow-xl flex items-center justify-between gap-4 sm:gap-3 hover:scale-105 transition-all text-2xs sm:text-xs md:text-sm w-full ${
               playerMode
                 ? 'bg-red-900/90 border-red-700 text-[#e8dcc4] hover:bg-red-800/90'
                 : 'bg-black/90 border-black/90 text-[#e8dcc4] hover:bg-black'
@@ -353,8 +343,8 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
               letterSpacing: '0.05em',
             }}
           >
-            <IoFootsteps className="text-base sm:text-lg md:text-xl" />
             <span>{playerMode ? 'Exit Map' : 'Enter Map'}</span>
+            <IoFootsteps className="text-base sm:text-lg md:text-xl" />
           </button>
 
           {/* Character Selector - only show when not in player mode */}
@@ -368,15 +358,17 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
                     dropdown.classList.toggle('hidden');
                   }
                 }}
-                className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 bg-black/90 backdrop-blur-sm rounded text-[#e8dcc4] shadow-xl text-2xs sm:text-xs md:text-sm cursor-pointer border-0 outline-none focus:outline-none focus:ring-0 hover:scale-105 transition-transform whitespace-nowrap w-full"
+                className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 flex justify-between md:py-3 bg-black/90 backdrop-blur-sm rounded text-[#e8dcc4] shadow-xl text-2xs sm:text-xs md:text-sm cursor-pointer border-0 outline-none focus:outline-none focus:ring-0 hover:scale-105 transition-transform whitespace-nowrap w-full"
                 style={{
                   fontFamily: "'IM Fell English', serif",
                   letterSpacing: '0.05em',
                 }}
               >
+                <span>
                 {selectedCharacterId
                   ? `Follow ${characters.find(c => c.id === selectedCharacterId)?.name}`
                   : 'Overview'}
+                </span>
                 <span className="ml-2">▼</span>
               </button>
 
@@ -417,13 +409,46 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
         </div>
 
         {/* Title - left side */}
-        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 md:top-6 md:left-6 z-50 pointer-events-none">
-          <h1
-            className="text-base sm:text-xl md:text-2xl lg:text-3xl text-black tracking-wider leading-tight"
-            style={{ fontFamily: "'IM Fell English', serif", fontStyle: 'italic' }}
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 md:top-6 md:left-6 z-50 flex items-center justify-center flex-col">
+          <div className="flex items-center gap-2 relative group">
+            <h1
+              className="text-base sm:text-lg md:text-xl lg:text-2xl text-black tracking-wider leading-tight pointer-events-none"
+              style={{ fontFamily: "'IM Fell English', serif", fontStyle: 'italic' }}
+            >
+              The Marauder's Map
+            </h1>
+            <div className="relative pointer-events-auto">
+              <IoInformationCircleOutline
+                className="text-base sm:text-lg md:text-xl text-black/60 hover:text-black cursor-help transition-colors"
+              />
+              {/* Info Tooltip - shows on hover */}
+              <div
+                className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute top-full left-0 mt-2 w-64 sm:w-72 md:w-80 px-4 py-3 sm:px-5 sm:py-4 bg-black/95 backdrop-blur-sm rounded shadow-2xl text-[#e8dcc4] border border-[#e8dcc4]/20 z-50"
+                style={{
+                  fontFamily: "'IM Fell English', serif",
+                  letterSpacing: '0.05em',
+                }}
+              >
+                <div className="text-xs sm:text-sm leading-relaxed">
+                  <p className="mb-3">
+                    This project is inspired by <span className="italic">The Marauder's Map</span> from the Harry Potter movies.
+                  </p>
+                  <p>
+                    Experience an immersive journey through the magical corridors and rooms. Follow characters as they roam, or enter the map yourself to explore firsthand.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <a
+            href="https://www.animeshbasnet.com.np/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-2xs sm:text-xs text-black/70 hover:text-black transition-colors pointer-events-auto mt-1 inline-block"
+            style={{ fontFamily: "'IM Fell English', serif" }}
           >
-            The Marauder's Map
-          </h1>
+            - by Crypticsy - 
+          </a>
         </div>
 
       {/* 3D Canvas */}
@@ -450,21 +475,156 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           {/* Click-to-move handler */}
           <ClickToMove enabled={playerMode} player={playerCharacter} />
 
-          {/* Lighting - Bright and clean */}
-          <ambientLight intensity={0.4} />
-          <directionalLight position={[10, 10, 5]} intensity={0.2} castShadow />
-          <directionalLight position={[-10, 5, -5]} intensity={0.5} />
-          <pointLight position={[0, 15, 0]} intensity={0.4} color="#ffd700" />
+          {/* Gentle lighting for old map aesthetic */}
+          <ambientLight intensity={0.3} />
+          <hemisphereLight
+            color="#f5e6d3"
+            groundColor="#d4b896"
+            intensity={0.25}
+            position={[0, 50, 0]}
+          />
+          <directionalLight
+            position={[50, 50, 50]}
+            intensity={0.15}
+            castShadow
+            shadow-camera-left={-60}
+            shadow-camera-right={60}
+            shadow-camera-top={60}
+            shadow-camera-bottom={-60}
+            shadow-camera-near={0.1}
+            shadow-camera-far={200}
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+          />
+          <directionalLight
+            position={[-50, 40, -50]}
+            intensity={0.1}
+          />
 
-          {/* Modern minimal map base - clean plain surface */}
+          {/* Old map base - visible faded orangish parchment */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
             <planeGeometry args={[100, 100]} />
             <meshStandardMaterial
-              map={parchmentTexture}
-              color="#d9cab3"
-              roughness={0.85}
-              metalness={0.02}
+              color="#d9b382"
+              roughness={0.95}
+              metalness={0.0}
+              emissive="#c9a577"
+              emissiveIntensity={0.2}
             />
+          </mesh>
+
+          {/* Burnt/aged edges effect - balanced visibility */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <planeGeometry args={[100, 100]} />
+            <meshBasicMaterial
+              transparent
+              opacity={0.25}
+              depthWrite={false}
+            >
+              <primitive
+                attach="map"
+                object={(() => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 512;
+                  canvas.height = 512;
+                  const ctx = canvas.getContext('2d')!;
+
+                  // Create visible but gentle radial gradient for aged edges
+                  const gradient = ctx.createRadialGradient(256, 256, 170, 256, 256, 256);
+                  gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                  gradient.addColorStop(0.72, 'rgba(70, 50, 35, 0)');
+                  gradient.addColorStop(0.86, 'rgba(60, 45, 30, 0.25)');
+                  gradient.addColorStop(0.94, 'rgba(50, 38, 25, 0.45)');
+                  gradient.addColorStop(1, 'rgba(45, 32, 20, 0.65)');
+
+                  ctx.fillStyle = gradient;
+                  ctx.fillRect(0, 0, 512, 512);
+
+                  // Add soft, blurry irregular aged marks around edges
+                  for (let i = 0; i < 18; i++) {
+                    const angle = (Math.PI * 2 * i) / 18;
+                    const radius = 242 + Math.random() * 18;
+                    const x = 256 + Math.cos(angle) * radius;
+                    const y = 256 + Math.sin(angle) * radius;
+                    const size = 10 + Math.random() * 14;
+                    const baseOpacity = 0.2 + Math.random() * 0.15;
+
+                    // Create soft blurry spot with radial gradient
+                    const blurGradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+                    blurGradient.addColorStop(0, `rgba(${55 + Math.random() * 18}, ${40 + Math.random() * 12}, ${28 + Math.random() * 10}, ${baseOpacity})`);
+                    blurGradient.addColorStop(0.4, `rgba(${60 + Math.random() * 15}, ${42 + Math.random() * 10}, ${30 + Math.random() * 8}, ${baseOpacity * 0.6})`);
+                    blurGradient.addColorStop(0.7, `rgba(${65 + Math.random() * 12}, ${45 + Math.random() * 8}, ${32 + Math.random() * 8}, ${baseOpacity * 0.3})`);
+                    blurGradient.addColorStop(1, 'rgba(70, 50, 35, 0)');
+
+                    ctx.fillStyle = blurGradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                  }
+
+                  const texture = new THREE.CanvasTexture(canvas);
+                  texture.needsUpdate = true;
+                  return texture;
+                })()}
+              />
+            </meshBasicMaterial>
+          </mesh>
+
+          {/* Age spots and stains - visible but gentle */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+            <planeGeometry args={[100, 100]} />
+            <meshBasicMaterial
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            >
+              <primitive
+                attach="map"
+                object={(() => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 512;
+                  canvas.height = 512;
+                  const ctx = canvas.getContext('2d')!;
+
+                  // Add noticeable but gentle age spots with soft blur
+                  for (let i = 0; i < 25; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = 6 + Math.random() * 14;
+                    const opacity = 0.15 + Math.random() * 0.12;
+
+                    // Create soft blurry spot with 4-stop radial gradient
+                    const spotGradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+                    spotGradient.addColorStop(0, `rgba(100, 75, 50, ${opacity})`);
+                    spotGradient.addColorStop(0.4, `rgba(95, 70, 48, ${opacity * 0.7})`);
+                    spotGradient.addColorStop(0.7, `rgba(90, 68, 45, ${opacity * 0.4})`);
+                    spotGradient.addColorStop(1, 'rgba(90, 68, 45, 0)');
+
+                    ctx.fillStyle = spotGradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                  }
+
+                  // Add visible water stain rings
+                  for (let i = 0; i < 6; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = 22 + Math.random() * 38;
+
+                    ctx.strokeStyle = `rgba(110, 85, 60, ${0.08 + Math.random() * 0.08})`;
+                    ctx.lineWidth = 2 + Math.random() * 2.5;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.stroke();
+                  }
+
+                  const texture = new THREE.CanvasTexture(canvas);
+                  texture.needsUpdate = true;
+                  return texture;
+                })()}
+              />
+            </meshBasicMaterial>
           </mesh>
 
           {/* Render all corridors (hand-drawn style, no grids) */}

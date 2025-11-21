@@ -3,9 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Character } from '../map/Character';
+import { PlayerCharacter } from '../map/PlayerCharacter';
 
 interface Character3DProps {
-  character: Character;
+  character: Character | PlayerCharacter;
   isActive: boolean;
 }
 
@@ -67,6 +68,9 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
   const [previousPositions, setPreviousPositions] = useState<Array<{x: number, z: number, rotation: number, time: number}>>([]);
   const [currentRotation, setCurrentRotation] = useState(0);
 
+  // Track previous position to detect movement from ANY source (AI or keyboard)
+  const previousPositionRef = useRef<{x: number, z: number} | null>(null);
+
   // Failsafe for genuinely stuck characters (not resting)
   const lastMoveTimeRef = useRef<number>(0);
   const stuckCheckPositionRef = useRef<{x: number, z: number} | null>(null);
@@ -77,9 +81,17 @@ export const Character3D: React.FC<Character3DProps> = ({ character, isActive })
 
   useFrame((state, delta) => {
     if (isActive) {
-      const oldPos = character.getPosition2D();
+      // Get position BEFORE update
+      const oldPos = previousPositionRef.current || character.getPosition2D();
+
+      // Update character (AI pathfinding)
       character.update(delta);
+
+      // Get position AFTER update (includes both AI and keyboard movement)
       const newPos = character.getPosition2D();
+
+      // Store current position for next frame
+      previousPositionRef.current = { ...newPos };
 
       // Check if character moved significantly
       const distance = Math.sqrt(

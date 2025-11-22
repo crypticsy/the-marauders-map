@@ -329,7 +329,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
         >
           -- &nbsp; Created by{" "}
           <a
-            href="https://github.com/crypticsy"
+            href="https://www.animeshbasnet.com.np/"
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-black/60 hover:text-black inline-flex items-center gap-2 hover:underline transition-colors"

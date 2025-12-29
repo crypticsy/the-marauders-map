@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { IoCloseCircleOutline, IoFootsteps, IoInformationCircleOutline } from 'react-icons/io5';
 import * as THREE from 'three';
+import { Vector2 } from 'three';
 import { Room } from '../map/Room';
 import { Corridor } from '../map/Corridor';
 import { Character } from '../map/Character';
@@ -13,6 +14,7 @@ import { Corridor3D } from './Corridor3D';
 import { Character3D } from './Character3D';
 import { MagicParticles } from './Particles3D';
 import { Obstacle3D } from './Obstacle3D';
+import { MobileJoystick } from './MobileJoystick';
 
 // Camera Follow Component
 interface CameraFollowProps {
@@ -132,6 +134,27 @@ const KeyboardControls: React.FC<KeyboardControlsProps> = ({ enabled, player }) 
   return null;
 };
 
+// Component to handle joystick controls for mobile
+interface JoystickControlsProps {
+  enabled: boolean;
+  player: PlayerCharacter | null;
+  direction: Vector2 | null;
+}
+
+const JoystickControls: React.FC<JoystickControlsProps> = ({ enabled, player, direction }) => {
+  useFrame((_state, delta) => {
+    if (!enabled || !player || !direction) return;
+
+    // Convert joystick direction to game coordinates
+    // Drag DOWN (positive Y) should move FORWARD (negative Z)
+    // Drag UP (negative Y) should move BACKWARD (positive Z)
+    // Therefore: z = -direction.y
+    player.moveInDirection({ x: direction.x, z: direction.y }, delta);
+  });
+
+  return null;
+};
+
 // Component to handle click-to-move
 interface ClickToMoveProps {
   enabled: boolean;
@@ -174,6 +197,7 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [playerMode, setPlayerMode] = useState<boolean>(false);
   const [playerCharacter, setPlayerCharacter] = useState<PlayerCharacter | null>(null);
+  const [joystickDirection, setJoystickDirection] = useState<Vector2 | null>(null);
   const controlsRef = useRef<any>(null);
 
   // Initialize map objects
@@ -313,6 +337,12 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
             </div>
           </div>
         )}
+
+        {/* Mobile Joystick Control */}
+        <MobileJoystick
+          onDirectionChange={setJoystickDirection}
+          isPlayerMode={playerMode}
+        />
 
         {/* All buttons on right side */}
         <div className="absolute top-3 right-3 sm:top-4 sm:right-4 md:top-6 md:right-6 z-50 flex flex-col gap-2 sm:gap-3" style={{ minWidth: '180px' }}>
@@ -471,6 +501,9 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
 
           {/* Keyboard controls for player */}
           <KeyboardControls enabled={playerMode} player={playerCharacter} />
+
+          {/* Joystick controls for mobile */}
+          <JoystickControls enabled={playerMode} player={playerCharacter} direction={joystickDirection} />
 
           {/* Click-to-move handler */}
           <ClickToMove enabled={playerMode} player={playerCharacter} />

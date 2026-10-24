@@ -1,652 +1,416 @@
-import { RoomConfig, CorridorConfig, CharacterConfig } from './types';
+import { RoomConfig, CorridorConfig, CharacterConfig, DecorationConfig, ObstacleConfig, Vector2 } from './types';
 
 /**
  * Hogwarts Map Configuration
- * Defines all rooms, corridors, and characters for the Marauder's Map
+ * Defines all rooms, corridors, grounds and characters for the Marauder's Map.
+ *
+ * Rooms are declared without connection points; each link below adds a doorway
+ * to both rooms and routes an orthogonal corridor between them automatically.
  */
 
-export const ROOMS: RoomConfig[] = [
-  // Grid Layout: X positions: -30, -20, 0, 20, 30 | Z positions: -30, -20, -10, 0, 10, 20, 30
+type Side = 'north' | 'south' | 'east' | 'west';
 
-  // Level Z=-30 (Far North - Towers)
-  {
-    id: 'gryffindor',
-    name: 'Gryffindor Tower',
-    position: { x: -30, y: 0, z: -30 },
-    size: { x: 5.5, y: 2.5, z: 4.2 },
-    color: '#8b0000',
-    connectionPoints: {
-      south: { x: 0, z: 2.1 },
-    },
-    obstacles: [
-      {
-        id: 'gryff_table',
-        name: 'Common Room Table',
-        position: { x: -1.8, z: -1.2 },
-        size: { x: 0.8, z: 0.4 },
-        height: 0.8,
-        type: 'furniture',
-      },
-    ],
-  },
-  {
-    id: 'ravenclaw',
-    name: 'Ravenclaw Tower',
-    position: { x: 30, y: 0, z: -30 },
-    size: { x: 5.5, y: 2.5, z: 4.2 },
-    color: '#00008b',
-    connectionPoints: {
-      south: { x: 0, z: 2.1 },
-    },
-    obstacles: [
-      {
-        id: 'raven_desk',
-        name: 'Study Desk',
-        position: { x: 1.8, z: -1.2 },
-        size: { x: 0.6, z: 0.4 },
-        height: 0.9,
-        type: 'furniture',
-      },
-    ],
-  },
+interface RoomDef {
+  id: string;
+  name: string;
+  x: number;
+  z: number;
+  w: number; // Width (x); diameter for round rooms
+  d: number; // Depth (z); ignored for round rooms
+  shape?: 'rect' | 'round';
+  floor?: 'stone' | 'grass' | 'wood';
+  labelOffset?: Vector2;
+  obstacles?: ObstacleConfig[];
+}
 
-  // Level Z=-20 (North - Upper Classrooms)
+interface LinkDef {
+  a: string;
+  sideA: Side;
+  b: string;
+  sideB: Side;
+  offsetA?: number; // Slide the doorway along the wall
+  offsetB?: number;
+  width?: number;
+  style?: 'hall' | 'path';
+}
+
+// Map extents (the parchment); everything is laid out inside these bounds
+export const MAP_BOUNDS = { minX: -74, maxX: 74, minZ: -60, maxZ: 58 };
+
+// Shorthand for furniture
+const piece = (
+  id: string,
+  name: string,
+  x: number,
+  z: number,
+  w: number,
+  d: number,
+  height = 0.5,
+  shape: 'box' | 'round' = 'box'
+): ObstacleConfig => ({ id, name, position: { x, z }, size: { x: w, z: d }, height, type: 'furniture', shape });
+
+const ROOM_DEFS: RoomDef[] = [
+  // ── Towers (far north) ───────────────────────────────────────────────
   {
-    id: 'transfiguration',
-    name: 'Transfiguration Classroom',
-    position: { x: -30, y: 0, z: -20 },
-    size: { x: 5, y: 2.5, z: 4 },
-    color: '#6a5acd',
-    connectionPoints: {
-      north: { x: 0, z: -2 },
-      south: { x: 0, z: 2 },
-      east: { x: 2.5, z: 0 },
-    },
+    id: 'gryffindor', name: 'Gryffindor Tower', x: -36, z: -36, w: 11, d: 11, shape: 'round',
     obstacles: [
-      {
-        id: 'trans_desk',
-        name: 'McGonagall Desk',
-        position: { x: 1.6, z: -1.2 },
-        size: { x: 0.6, z: 0.4 },
-        height: 0.8,
-        type: 'furniture',
-      },
+      piece('gryff_fire', 'Fireplace', 0, -3.6, 2.2, 0.8, 0.6),
+      piece('gryff_sofa', 'Armchair', -2.6, 1.6, 1, 1, 0.4),
+      piece('gryff_sofa2', 'Armchair', 2.6, 1.6, 1, 1, 0.4),
     ],
   },
   {
-    id: 'astronomy_tower',
-    name: 'Astronomy Tower',
-    position: { x: 0, y: 0, z: -20 },
-    size: { x: 4.5, y: 3, z: 4.5 },
-    color: '#191970',
-    connectionPoints: {
-      south: { x: 0, z: 2.25 },
-      east: { x: 2.25, z: 0 },
-      west: { x: -2.25, z: 0 },
-    },
+    id: 'divination', name: 'Divination', x: -16, z: -36, w: 8, d: 8, shape: 'round',
+    obstacles: [piece('crystal_ball', 'Crystal Ball', 0, -1.6, 0.8, 0.8, 0.5, 'round')],
+    labelOffset: { x: 0, z: 1 },
+  },
+  {
+    id: 'astronomy_tower', name: 'Astronomy Tower', x: 0, z: -40, w: 9, d: 9, shape: 'round',
+    obstacles: [piece('telescope', 'Telescope', 0, -2.2, 0.7, 0.7, 0.8, 'round')],
+    labelOffset: { x: 0, z: 0.8 },
+  },
+  {
+    id: 'room_of_requirement', name: 'Room of Requirement', x: 16, z: -36, w: 9, d: 7,
+    obstacles: [piece('ror_cabinet', 'Vanishing Cabinet', 3.2, -2, 1, 1, 0.9)],
+    labelOffset: { x: 0, z: 0.6 },
+  },
+  {
+    id: 'ravenclaw', name: 'Ravenclaw Tower', x: 36, z: -36, w: 11, d: 11, shape: 'round',
     obstacles: [
-      {
-        id: 'telescope',
-        name: 'Telescope',
-        position: { x: 1.4, z: 1.4 },
-        size: { x: 0.4, z: 0.4 },
-        height: 1.2,
-        type: 'furniture',
-      },
+      piece('raven_statue', 'Rowena Statue', 0, -3.4, 1, 1, 0.9, 'round'),
+      piece('raven_desk', 'Study Desk', 2.8, 1.8, 1.4, 0.8, 0.4),
     ],
   },
   {
-    id: 'charms',
-    name: 'Charms Classroom',
-    position: { x: 30, y: 0, z: -20 },
-    size: { x: 5, y: 2.5, z: 4 },
-    color: '#daa520',
-    connectionPoints: {
-      north: { x: 0, z: -2 },
-      south: { x: 0, z: 2 },
-      west: { x: -2.5, z: 0 },
-    },
-    obstacles: [
-      {
-        id: 'charms_desk',
-        name: 'Flitwick Desk',
-        position: { x: -1.6, z: -1.2 },
-        size: { x: 0.5, z: 0.3 },
-        height: 0.6,
-        type: 'furniture',
-      },
-    ],
+    id: 'owlery', name: 'Owlery', x: -58, z: -24, w: 7, d: 7, shape: 'round',
+    obstacles: [piece('perch', 'Perch', 0, 0, 0.8, 0.8, 0.6, 'round')],
+    labelOffset: { x: 0, z: 1.8 },
   },
 
-  // Level Z=-10 (North Central - Specialized Rooms)
+  // ── Upper floor ──────────────────────────────────────────────────────
   {
-    id: 'divination',
-    name: 'Divination Tower',
-    position: { x: -20, y: 0, z: -10 },
-    size: { x: 4.5, y: 2.5, z: 4.5 },
-    color: '#9370db',
-    connectionPoints: {
-      south: { x: 0, z: 2.25 },
-      east: { x: 2.25, z: 0 },
-    },
+    id: 'transfiguration', name: 'Transfiguration', x: -36, z: -20, w: 13, d: 8,
     obstacles: [
-      {
-        id: 'crystal_ball',
-        name: 'Crystal Ball',
-        position: { x: 0, z: 0 },
-        size: { x: 0.3, z: 0.3 },
-        height: 0.5,
-        type: 'furniture',
-      },
+      piece('trans_desk', "McGonagall's Desk", 3.6, -2.4, 3, 0.8),
+      piece('trans_bench1', 'Bench', -4, 2, 2.4, 0.6, 0.35),
+      piece('trans_bench2', 'Bench', 4, 2, 2.4, 0.6, 0.35),
     ],
   },
   {
-    id: 'main_corridor',
-    name: 'Main Corridor',
-    position: { x: 0, y: 0, z: -10 },
-    size: { x: 6, y: 2, z: 3 },
-    color: '#696969',
-    connectionPoints: {
-      north: { x: 0, z: -1.5 },
-      south: { x: 0, z: 1.5 },
-      east: { x: 3, z: 0 },
-      west: { x: -3, z: 0 },
-    },
-    obstacles: [],
+    id: 'grand_staircase', name: 'Grand Staircase', x: 0, z: -20, w: 10, d: 10, floor: 'wood',
+    labelOffset: { x: 0, z: 3.6 },
   },
   {
-    id: 'forbidden_section',
-    name: 'Restricted Section',
-    position: { x: 20, y: 0, z: -10 },
-    size: { x: 4, y: 2.5, z: 3.5 },
-    color: '#2f4f4f',
-    connectionPoints: {
-      south: { x: 0, z: 1.75 },
-      west: { x: -2, z: 0 },
-    },
+    id: 'charms', name: 'Charms', x: 36, z: -20, w: 13, d: 8,
     obstacles: [
-      {
-        id: 'forbidden_shelf',
-        name: 'Dark Books Shelf',
-        position: { x: 1.2, z: -1 },
-        size: { x: 0.3, z: 1 },
-        height: 2,
-        type: 'furniture',
-      },
+      piece('charms_desk', "Flitwick's Books", -3.6, -2.4, 2.4, 0.8, 0.6),
+      piece('charms_bench1', 'Bench', -4, 2, 2.4, 0.6, 0.35),
+      piece('charms_bench2', 'Bench', 4, 2, 2.4, 0.6, 0.35),
+    ],
+  },
+  {
+    id: 'dumbledore_office', name: "Headmaster's Office", x: -18, z: -12, w: 8, d: 8, shape: 'round',
+    obstacles: [
+      piece('dumbledore_desk', 'Desk', 0, -2, 2, 0.8),
+      piece('pensieve', 'Pensieve', -1.8, 1.4, 0.8, 0.8, 0.5, 'round'),
+    ],
+    labelOffset: { x: 0.6, z: 1.2 },
+  },
+  {
+    id: 'trophy_room', name: 'Trophy Room', x: 18, z: -12, w: 9, d: 7,
+    obstacles: [
+      piece('trophy_case1', 'Trophy Cabinet', -3.4, -2.6, 1.4, 0.6, 0.9),
+      piece('trophy_case2', 'Trophy Cabinet', 0, -2.6, 1.4, 0.6, 0.9),
+      piece('trophy_case3', 'Trophy Cabinet', 3.4, -2.6, 1.4, 0.6, 0.9),
+    ],
+    labelOffset: { x: 0, z: 0.6 },
+  },
+
+  // ── Main floor ───────────────────────────────────────────────────────
+  {
+    id: 'dada', name: 'Defence Against the Dark Arts', x: -36, z: -2, w: 13, d: 9,
+    obstacles: [
+      piece('dada_desk', 'Teacher Desk', 3.4, -2.8, 2.6, 0.8),
+      piece('dada_skeleton', 'Dragon Skeleton', -4.6, 2.6, 1.4, 1.4, 0.7, 'round'),
+    ],
+  },
+  {
+    id: 'great_hall', name: 'The Great Hall', x: 0, z: -2, w: 19, d: 12,
+    obstacles: [
+      piece('staff_table', 'Staff Table', 0, -2.9, 10, 0.8),
+      piece('table_gryffindor', 'Gryffindor Table', -6.3, 1.2, 1, 4.4),
+      piece('table_hufflepuff', 'Hufflepuff Table', -2.1, 1.2, 1, 4.4),
+      piece('table_ravenclaw', 'Ravenclaw Table', 2.1, 1.2, 1, 4.4),
+      piece('table_slytherin', 'Slytherin Table', 6.3, 1.2, 1, 4.4),
+    ],
+    labelOffset: { x: 0, z: 4.6 },
+  },
+  {
+    id: 'library', name: 'Library', x: 36, z: -2, w: 13, d: 10,
+    obstacles: [
+      piece('lib_shelf1', 'Bookshelf', -4.4, -1, 0.6, 4.4, 1.0),
+      piece('lib_shelf2', 'Bookshelf', 4.4, -1, 0.6, 4.4, 1.0),
+      piece('lib_table', 'Reading Table', 0, 2.6, 3, 1),
+    ],
+    labelOffset: { x: 0, z: -0.8 },
+  },
+  {
+    id: 'restricted_section', name: 'Restricted Section', x: 54, z: -2, w: 8, d: 8,
+    obstacles: [
+      piece('restricted_shelf1', 'Dark Books', -2, -2.4, 3, 0.6, 1.0),
+      piece('restricted_shelf2', 'Dark Books', 1.6, 2.4, 3, 0.6, 1.0),
     ],
   },
 
-  // Level Z=0 (Center - Main Hub)
+  // ── Lower floor & dungeons ───────────────────────────────────────────
   {
-    id: 'dada',
-    name: 'Defense Against Dark Arts',
-    position: { x: -20, y: 0, z: 0 },
-    size: { x: 5.5, y: 2.5, z: 4.5 },
-    color: '#4b0082',
-    connectionPoints: {
-      east: { x: 2.75, z: 0 },
-      north: { x: 0, z: -2.25 },
-      south: { x: 0, z: 2.25 },
-    },
+    id: 'potions', name: 'Potions Dungeon', x: -36, z: 15, w: 13, d: 8,
     obstacles: [
-      {
-        id: 'dada_desk',
-        name: 'Teacher Desk',
-        position: { x: 1.8, z: -1.3 },
-        size: { x: 0.7, z: 0.4 },
-        height: 0.8,
-        type: 'furniture',
-      },
+      piece('cauldron1', 'Cauldron', -3.6, 1.8, 0.9, 0.9, 0.5, 'round'),
+      piece('cauldron2', 'Cauldron', 0, 1.8, 0.9, 0.9, 0.5, 'round'),
+      piece('cauldron3', 'Cauldron', 3.6, 1.8, 0.9, 0.9, 0.5, 'round'),
+      piece('pot_shelf', 'Ingredient Shelf', -5.4, 0, 0.6, 4, 1.0),
+    ],
+    labelOffset: { x: 0, z: -0.8 },
+  },
+  {
+    id: 'entrance_hall', name: 'Entrance Hall', x: 0, z: 15, w: 13, d: 8,
+    obstacles: [
+      piece('hourglass1', 'House Points', -4.6, -2.4, 0.7, 0.7, 0.9, 'round'),
+      piece('hourglass2', 'House Points', -2.8, -2.4, 0.7, 0.7, 0.9, 'round'),
+      piece('hourglass3', 'House Points', 2.8, -2.4, 0.7, 0.7, 0.9, 'round'),
+      piece('hourglass4', 'House Points', 4.6, -2.4, 0.7, 0.7, 0.9, 'round'),
     ],
   },
   {
-    id: 'great_hall',
-    name: 'Great Hall',
-    position: { x: 0, y: 0, z: 0 },
-    size: { x: 9, y: 2, z: 6 },
-    color: '#b8860b',
-    connectionPoints: {
-      north: { x: 0, z: -3 },
-      south: { x: 0, z: 3 },
-      east: { x: 4.5, z: 0 },
-      west: { x: -4.5, z: 0 },
-    },
+    id: 'hospital_wing', name: 'Hospital Wing', x: 36, z: 15, w: 13, d: 8,
     obstacles: [
-      {
-        id: 'hall_table1',
-        name: 'Long Table',
-        position: { x: -2.4, z: -1.5 },
-        size: { x: 1.2, z: 0.5 },
-        height: 0.8,
-        type: 'furniture',
-      },
-      {
-        id: 'hall_table2',
-        name: 'Long Table',
-        position: { x: 2.4, z: -1.5 },
-        size: { x: 2.2, z: 0.5 },
-        height: 0.8,
-        type: 'furniture',
-      },
+      piece('bed1', 'Bed', -4.6, -2.4, 1, 2),
+      piece('bed2', 'Bed', -2, -2.4, 1, 2),
+      piece('bed3', 'Bed', 2, -2.4, 1, 2),
+      piece('bed4', 'Bed', 4.6, -2.4, 1, 2),
+    ],
+    labelOffset: { x: 0, z: 1.4 },
+  },
+  {
+    id: 'slytherin', name: 'Slytherin Dungeon', x: -36, z: 31, w: 13, d: 8,
+    obstacles: [
+      piece('slyth_fire', 'Fireplace', 0, 3, 2.4, 0.8, 0.6),
+      piece('slyth_chair', 'Armchair', -4.4, -2, 1, 1, 0.4),
+      piece('slyth_chair2', 'Armchair', 4.4, -2, 1, 1, 0.4),
     ],
   },
   {
-    id: 'library',
-    name: 'Library',
-    position: { x: 20, y: 0, z: 0 },
-    size: { x: 6, y: 2.5, z: 5 },
-    color: '#8b4513',
-    connectionPoints: {
-      west: { x: -3, z: 0 },
-      north: { x: 0, z: -2.5 },
-      south: { x: 0, z: 2.5 },
-    },
+    id: 'courtyard', name: 'Courtyard', x: 0, z: 30, w: 14, d: 8, floor: 'grass',
+    obstacles: [piece('fountain', 'Fountain', 0, 0, 2, 2, 0.4, 'round')],
+    labelOffset: { x: 0, z: 2.6 },
+  },
+  {
+    id: 'hufflepuff', name: 'Hufflepuff Basement', x: 20, z: 31, w: 10, d: 7,
+    obstacles: [piece('huff_barrels', 'Barrels', 3.2, 2, 1.2, 1.2, 0.6, 'round')],
+    labelOffset: { x: -0.6, z: -0.4 },
+  },
+  {
+    id: 'kitchens', name: 'Kitchens', x: 38, z: 31, w: 11, d: 7,
     obstacles: [
-      {
-        id: 'lib_shelf1',
-        name: 'Bookshelf',
-        position: { x: -2, z: -1.5 },
-        size: { x: 0.3, z: 0.8 },
-        height: 1.8,
-        type: 'furniture',
-      },
-      {
-        id: 'lib_shelf2',
-        name: 'Bookshelf',
-        position: { x: 2, z: -1.5 },
-        size: { x: 0.3, z: 0.8 },
-        height: 1.8,
-        type: 'furniture',
-      },
-      {
-        id: 'lib_table',
-        name: 'Reading Table',
-        position: { x: -1.8, z: 1.2 },
-        size: { x: 0.9, z: 0.5 },
-        height: 0.8,
-        type: 'furniture',
-      },
+      piece('kitchen_table', 'Kitchen Table', 0.4, 1.2, 5, 1),
+      piece('kitchen_oven', 'Oven', 4.4, -2.2, 1, 1, 0.7),
     ],
+    labelOffset: { x: 0, z: -1.2 },
   },
 
-  // Level Z=10 (South Central - Services)
+  // ── Grounds ──────────────────────────────────────────────────────────
   {
-    id: 'trophy_room',
-    name: 'Trophy Room',
-    position: { x: -20, y: 0, z: 10 },
-    size: { x: 5, y: 2.5, z: 4 },
-    color: '#c0c0c0',
-    connectionPoints: {
-      north: { x: 0, z: -2 },
-      south: { x: 0, z: 2 },
-    },
-    obstacles: [
-      {
-        id: 'trophy_case',
-        name: 'Trophy Display',
-        position: { x: 1.6, z: -1.2 },
-        size: { x: 0.4, z: 0.8 },
-        height: 1.6,
-        type: 'furniture',
-      },
-    ],
+    id: 'hagrids_hut', name: "Hagrid's Hut", x: -24, z: 47, w: 7, d: 7, shape: 'round', floor: 'wood',
+    obstacles: [piece('hagrid_fire', 'Hearth', 0, -2, 1.2, 0.8, 0.5)],
+    labelOffset: { x: 0, z: 1 },
   },
   {
-    id: 'courtyard',
-    name: 'Courtyard',
-    position: { x: 0, y: 0, z: 10 },
-    size: { x: 6, y: 1.5, z: 4 },
-    color: '#98fb98',
-    connectionPoints: {
-      north: { x: 0, z: -2 },
-      south: { x: 0, z: 2 },
-    },
-    obstacles: [],
-  },
-  {
-    id: 'hospital_wing',
-    name: 'Hospital Wing',
-    position: { x: 20, y: 0, z: 10 },
-    size: { x: 5.5, y: 2.5, z: 5 },
-    color: '#f0f8ff',
-    connectionPoints: {
-      north: { x: 0, z: -2.5 },
-      south: { x: 0, z: 2.5 },
-    },
+    id: 'greenhouses', name: 'Greenhouses', x: 22, z: 47, w: 13, d: 7, floor: 'grass',
     obstacles: [
-      {
-        id: 'hospital_bed',
-        name: 'Hospital Bed',
-        position: { x: -1.8, z: -1.5 },
-        size: { x: 0.6, z: 1.2 },
-        height: 0.6,
-        type: 'furniture',
-      },
+      piece('mandrakes1', 'Mandrakes', -3.6, -1.8, 2.6, 0.9, 0.4),
+      piece('mandrakes2', 'Mandrakes', 3.6, -1.8, 2.6, 0.9, 0.4),
     ],
-  },
-
-  // Level Z=20 (South - Dungeons/Outdoors)
-  {
-    id: 'potions',
-    name: 'Potions Classroom',
-    position: { x: -20, y: 0, z: 20 },
-    size: { x: 5.5, y: 2, z: 4.5 },
-    color: '#654321',
-    connectionPoints: {
-      north: { x: 0, z: -2.25 },
-      south: { x: 0, z: 2.25 },
-    },
-    obstacles: [
-      {
-        id: 'pot_cauldron',
-        name: 'Cauldron Stand',
-        position: { x: 1.5, z: 1.2 },
-        size: { x: 0.4, z: 0.4 },
-        height: 1.0,
-        type: 'furniture',
-      },
-      {
-        id: 'pot_shelf',
-        name: 'Ingredient Shelf',
-        position: { x: -1.8, z: -1.4 },
-        size: { x: 0.25, z: 0.8 },
-        height: 1.5,
-        type: 'furniture',
-      },
-    ],
-  },
-  {
-    id: 'dumbledore_office',
-    name: "Dumbledore's Office",
-    position: { x: 0, y: 0, z: 20 },
-    size: { x: 5, y: 3, z: 5 },
-    color: '#cd853f',
-    connectionPoints: {
-      north: { x: 0, z: -2.5 },
-      south: { x: 0, z: 2.5 },
-    },
-    obstacles: [
-      {
-        id: 'dumbledore_desk',
-        name: 'Headmaster Desk',
-        position: { x: 1.6, z: 1.6 },
-        size: { x: 0.8, z: 0.6 },
-        height: 0.9,
-        type: 'furniture',
-      },
-      {
-        id: 'pensieve',
-        name: 'Pensieve',
-        position: { x: -1.6, z: 1.6 },
-        size: { x: 0.5, z: 0.5 },
-        height: 0.8,
-        type: 'furniture',
-      },
-    ],
-  },
-  {
-    id: 'herbology',
-    name: 'Herbology Greenhouse',
-    position: { x: 20, y: 0, z: 20 },
-    size: { x: 6, y: 2.5, z: 5 },
-    color: '#228b22',
-    connectionPoints: {
-      north: { x: 0, z: -2.5 },
-      south: { x: 0, z: 2.5 },
-    },
-    obstacles: [
-      {
-        id: 'plant_pot',
-        name: 'Mandrake Pot',
-        position: { x: -2, z: -1.5 },
-        size: { x: 0.5, z: 0.5 },
-        height: 0.8,
-        type: 'furniture',
-      },
-    ],
-  },
-
-  // Level Z=30 (Far South - Common Rooms) - Aligned for straight corridors
-  {
-    id: 'slytherin',
-    name: 'Slytherin Dungeon',
-    position: { x: -20, y: 0, z: 30 },
-    size: { x: 5.5, y: 2, z: 4.2 },
-    color: '#006400',
-    connectionPoints: {
-      north: { x: 0, z: -2.1 },
-    },
-    obstacles: [
-      {
-        id: 'slyth_chair',
-        name: 'Armchair',
-        position: { x: -1.8, z: 1.0 },
-        size: { x: 0.5, z: 0.5 },
-        height: 0.9,
-        type: 'furniture',
-      },
-    ],
-  },
-  {
-    id: 'hufflepuff',
-    name: 'Hufflepuff Common Room',
-    position: { x: 20, y: 0, z: 30 },
-    size: { x: 5.5, y: 2, z: 3.5 },
-    color: '#ffd700',
-    connectionPoints: {
-      north: { x: 0, z: -1.75 },
-    },
-    obstacles: [
-      {
-        id: 'huff_couch',
-        name: 'Cozy Couch',
-        position: { x: 1.8, z: 1.0 },
-        size: { x: 1.0, z: 0.5 },
-        height: 0.7,
-        type: 'furniture',
-      },
-    ],
+    labelOffset: { x: 0, z: 1.2 },
   },
 ];
 
-export const CORRIDORS: CorridorConfig[] = [
-  // All corridors are perfectly horizontal or vertical - NO DIAGONALS
+const LINKS: LinkDef[] = [
+  // Towers
+  { a: 'gryffindor', sideA: 'south', b: 'transfiguration', sideB: 'north' },
+  { a: 'ravenclaw', sideA: 'south', b: 'charms', sideB: 'north' },
+  { a: 'astronomy_tower', sideA: 'south', b: 'grand_staircase', sideB: 'north' },
+  { a: 'divination', sideA: 'south', b: 'grand_staircase', sideB: 'north', offsetB: -3.4, width: 2.2 },
+  { a: 'room_of_requirement', sideA: 'south', b: 'grand_staircase', sideB: 'north', offsetB: 3.4, width: 2.2 },
+  { a: 'gryffindor', sideA: 'west', b: 'owlery', sideB: 'east', width: 2.2 },
 
-  // North Wing - Vertical corridors (z-axis connections)
-  {
-    id: 'corridor_gryffindor_transfiguration',
-    roomA: 'gryffindor',
-    roomB: 'transfiguration',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=-30
-  },
-  {
-    id: 'corridor_ravenclaw_charms',
-    roomA: 'ravenclaw',
-    roomB: 'charms',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=30
-  },
-  {
-    id: 'corridor_astronomy_main',
-    roomA: 'astronomy_tower',
-    roomB: 'main_corridor',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=0
-  },
+  // Upper floor
+  { a: 'transfiguration', sideA: 'east', b: 'grand_staircase', sideB: 'west' },
+  { a: 'grand_staircase', sideA: 'east', b: 'charms', sideB: 'west' },
+  { a: 'grand_staircase', sideA: 'south', b: 'great_hall', sideB: 'north', width: 3 },
+  { a: 'dumbledore_office', sideA: 'east', b: 'great_hall', sideB: 'north', offsetB: -6, width: 2.2 },
+  { a: 'trophy_room', sideA: 'west', b: 'great_hall', sideB: 'north', offsetB: 6, width: 2.2 },
 
-  // North Wing - Horizontal corridors (x-axis connections at z=-20)
-  {
-    id: 'corridor_transfiguration_astronomy',
-    roomA: 'transfiguration',
-    roomB: 'astronomy_tower',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=-20
-  },
-  {
-    id: 'corridor_astronomy_charms',
-    roomA: 'astronomy_tower',
-    roomB: 'charms',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=-20
-  },
+  // Wings
+  { a: 'transfiguration', sideA: 'south', b: 'dada', sideB: 'north' },
+  { a: 'charms', sideA: 'south', b: 'library', sideB: 'north' },
+  { a: 'dada', sideA: 'east', b: 'great_hall', sideB: 'west' },
+  { a: 'great_hall', sideA: 'east', b: 'library', sideB: 'west' },
+  { a: 'library', sideA: 'east', b: 'restricted_section', sideB: 'west', width: 2.2 },
+  { a: 'dada', sideA: 'south', b: 'potions', sideB: 'north' },
+  { a: 'library', sideA: 'south', b: 'hospital_wing', sideB: 'north' },
+  { a: 'great_hall', sideA: 'south', b: 'entrance_hall', sideB: 'north', width: 3 },
 
-  // North Central - Horizontal corridors (x-axis connections at z=-10)
-  {
-    id: 'corridor_divination_main',
-    roomA: 'divination',
-    roomB: 'main_corridor',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=-10
-  },
-  {
-    id: 'corridor_main_forbidden',
-    roomA: 'main_corridor',
-    roomB: 'forbidden_section',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=-10
-  },
+  // Lower floor & dungeons
+  { a: 'potions', sideA: 'east', b: 'entrance_hall', sideB: 'west' },
+  { a: 'entrance_hall', sideA: 'east', b: 'hospital_wing', sideB: 'west' },
+  { a: 'potions', sideA: 'south', b: 'slytherin', sideB: 'north' },
+  { a: 'entrance_hall', sideA: 'south', b: 'courtyard', sideB: 'north', width: 3 },
+  { a: 'hospital_wing', sideA: 'south', b: 'kitchens', sideB: 'north', offsetB: -2 },
+  { a: 'hufflepuff', sideA: 'east', b: 'kitchens', sideB: 'west' },
 
-  // Central - Vertical corridors
-  {
-    id: 'corridor_divination_dada',
-    roomA: 'divination',
-    roomB: 'dada',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=-20
-  },
-  {
-    id: 'corridor_main_hall',
-    roomA: 'main_corridor',
-    roomB: 'great_hall',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 3.0,
-    waypoints: [], // Straight vertical: both at x=0
-  },
-  {
-    id: 'corridor_forbidden_library',
-    roomA: 'forbidden_section',
-    roomB: 'library',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=20
-  },
+  // Paths across the grounds
+  { a: 'courtyard', sideA: 'west', b: 'hagrids_hut', sideB: 'north', style: 'path', width: 2.2 },
+  { a: 'courtyard', sideA: 'south', b: 'greenhouses', sideB: 'west', style: 'path', width: 2.2 },
+];
 
-  // Central - Horizontal corridors (x-axis connections at z=0)
-  {
-    id: 'corridor_dada_hall',
-    roomA: 'dada',
-    roomB: 'great_hall',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=0
-  },
-  {
-    id: 'corridor_hall_library',
-    roomA: 'great_hall',
-    roomB: 'library',
-    connectionA: 'east',
-    connectionB: 'west',
-    width: 2.5,
-    waypoints: [], // Straight horizontal: both at z=0
-  },
+/**
+ * Place a doorway on a room wall (on the circle for round rooms)
+ */
+const doorOffset = (room: RoomDef, side: Side, along: number): Vector2 => {
+  if (room.shape === 'round') {
+    const r = room.w / 2;
+    const across = Math.sqrt(Math.max(r * r - along * along, 0));
+    switch (side) {
+      case 'north': return { x: along, z: -across };
+      case 'south': return { x: along, z: across };
+      case 'east': return { x: across, z: along };
+      case 'west': return { x: -across, z: along };
+    }
+  }
+  switch (side) {
+    case 'north': return { x: along, z: -room.d / 2 };
+    case 'south': return { x: along, z: room.d / 2 };
+    case 'east': return { x: room.w / 2, z: along };
+    case 'west': return { x: -room.w / 2, z: along };
+  }
+};
 
-  // South Central - Vertical corridors
-  {
-    id: 'corridor_dada_trophy',
-    roomA: 'dada',
-    roomB: 'trophy_room',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=-20
-  },
-  {
-    id: 'corridor_hall_courtyard',
-    roomA: 'great_hall',
-    roomB: 'courtyard',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 3.0,
-    waypoints: [], // Straight vertical: both at x=0
-  },
-  {
-    id: 'corridor_library_hospital',
-    roomA: 'library',
-    roomB: 'hospital_wing',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=20
-  },
+const isHorizontal = (side: Side) => side === 'east' || side === 'west';
 
-  // South Wing - Vertical corridors
-  {
-    id: 'corridor_trophy_potions',
-    roomA: 'trophy_room',
-    roomB: 'potions',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=-20
-  },
-  {
-    id: 'corridor_courtyard_dumbledore',
-    roomA: 'courtyard',
-    roomB: 'dumbledore_office',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=0
-  },
-  {
-    id: 'corridor_hospital_herbology',
-    roomA: 'hospital_wing',
-    roomB: 'herbology',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=20
-  },
+/**
+ * Route an orthogonal corridor between two doorways (straight, L or Z shaped)
+ */
+const routeCorridor = (a: Vector2, sideA: Side, b: Vector2, sideB: Side): Vector2[] => {
+  const eps = 0.01;
+  if (isHorizontal(sideA) && isHorizontal(sideB)) {
+    if (Math.abs(a.z - b.z) < eps) return [];
+    const midX = (a.x + b.x) / 2;
+    return [{ x: midX, z: a.z }, { x: midX, z: b.z }];
+  }
+  if (!isHorizontal(sideA) && !isHorizontal(sideB)) {
+    if (Math.abs(a.x - b.x) < eps) return [];
+    const midZ = (a.z + b.z) / 2;
+    return [{ x: a.x, z: midZ }, { x: b.x, z: midZ }];
+  }
+  return isHorizontal(sideA) ? [{ x: b.x, z: a.z }] : [{ x: a.x, z: b.z }];
+};
 
-  // Far South - Perfectly straight vertical corridors
+const buildMap = (): { rooms: RoomConfig[]; corridors: CorridorConfig[] } => {
+  const defs = new Map(ROOM_DEFS.map((def) => [def.id, def]));
+  const connectionPoints = new Map<string, { [key: string]: Vector2 }>(
+    ROOM_DEFS.map((def) => [def.id, {}])
+  );
+
+  // Give each doorway a unique name per room (north, north_2, ...)
+  const addDoor = (roomId: string, side: Side, along: number): { name: string; absolute: Vector2 } => {
+    const def = defs.get(roomId);
+    if (!def) throw new Error(`Unknown room in map links: ${roomId}`);
+    const points = connectionPoints.get(roomId)!;
+    let name: string = side;
+    for (let n = 2; points[name]; n++) name = `${side}_${n}`;
+    const offset = doorOffset(def, side, along);
+    points[name] = offset;
+    return { name, absolute: { x: def.x + offset.x, z: def.z + offset.z } };
+  };
+
+  const corridors: CorridorConfig[] = LINKS.map((link) => {
+    const doorA = addDoor(link.a, link.sideA, link.offsetA || 0);
+    const doorB = addDoor(link.b, link.sideB, link.offsetB || 0);
+    return {
+      id: `corridor_${link.a}_${link.b}`,
+      roomA: link.a,
+      roomB: link.b,
+      connectionA: doorA.name,
+      connectionB: doorB.name,
+      width: link.width || 2.6,
+      style: link.style || 'hall',
+      waypoints: routeCorridor(doorA.absolute, link.sideA, doorB.absolute, link.sideB),
+    };
+  });
+
+  const rooms: RoomConfig[] = ROOM_DEFS.map((def) => ({
+    id: def.id,
+    name: def.name,
+    position: { x: def.x, y: 0, z: def.z },
+    size: { x: def.w, y: 2.5, z: def.shape === 'round' ? def.w : def.d },
+    color: '#3d2817',
+    connectionPoints: connectionPoints.get(def.id)!,
+    obstacles: def.obstacles || [],
+    shape: def.shape,
+    floor: def.floor,
+    labelOffset: def.labelOffset,
+  }));
+
+  return { rooms, corridors };
+};
+
+const MAP = buildMap();
+
+export const ROOMS: RoomConfig[] = MAP.rooms;
+
+export const CORRIDORS: CorridorConfig[] = MAP.corridors;
+
+export const DECORATIONS: DecorationConfig[] = [
   {
-    id: 'corridor_potions_slytherin',
-    roomA: 'potions',
-    roomB: 'slytherin',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=-20
+    kind: 'lake',
+    id: 'black_lake',
+    name: 'The Black Lake',
+    outline: [
+      { x: 50, z: 18 }, { x: 58, z: 14 }, { x: 66, z: 17 }, { x: 70, z: 26 }, { x: 69, z: 40 },
+      { x: 64, z: 51 }, { x: 54, z: 54 }, { x: 44, z: 52 }, { x: 38, z: 44 }, { x: 46, z: 38 },
+      { x: 47, z: 27 },
+    ],
   },
   {
-    id: 'corridor_herbology_hufflepuff',
-    roomA: 'herbology',
-    roomB: 'hufflepuff',
-    connectionA: 'south',
-    connectionB: 'north',
-    width: 2.5,
-    waypoints: [], // Straight vertical: both at x=20
+    kind: 'forest',
+    id: 'forbidden_forest',
+    name: 'The Forbidden Forest',
+    density: 1,
+    outline: [
+      { x: -71, z: 2 }, { x: -54, z: 0 }, { x: -48, z: 10 }, { x: -50, z: 24 }, { x: -46, z: 38 },
+      { x: -34, z: 41 }, { x: -31, z: 55 }, { x: -71, z: 55 },
+    ],
   },
+  { kind: 'pitch', id: 'quidditch_pitch', name: 'Quidditch Pitch', position: { x: 60, z: -30 }, size: { x: 16, z: 30 } },
+  { kind: 'tree', id: 'whomping_willow', name: 'Whomping Willow', position: { x: -10, z: 41 }, radius: 2.2 },
+  {
+    kind: 'passage',
+    id: 'passage_shrieking_shack',
+    name: 'to the Shrieking Shack',
+    points: [{ x: -10, z: 41 }, { x: -12, z: 48 }, { x: -9, z: 54 }, { x: -12, z: 58 }],
+  },
+  {
+    kind: 'passage',
+    id: 'passage_honeydukes',
+    name: 'to Honeydukes Cellar',
+    points: [{ x: -21, z: -20 }, { x: -24, z: -26 }, { x: -46, z: -28 }, { x: -50, z: -40 }, { x: -46, z: -50 }],
+  },
+  { kind: 'stairs', id: 'stairs_west', position: { x: -2.6, z: -21 }, size: { x: 2.2, z: 5 }, direction: 'z' },
+  { kind: 'stairs', id: 'stairs_east', position: { x: 2.6, z: -21 }, size: { x: 2.2, z: 5 }, direction: 'z' },
+  { kind: 'label', id: 'label_one_eyed_witch', name: 'One-Eyed Witch', position: { x: -21, z: -17.6 }, size: 0.75 },
+  { kind: 'label', id: 'label_gargoyle', name: 'Gargoyle', position: { x: -10, z: -14.6 }, size: 0.75 },
+  { kind: 'label', id: 'label_hogsmeade', name: 'Hogsmeade', position: { x: 0, z: 55 }, size: 1.4 },
 ];
 
 export const CHARACTERS: CharacterConfig[] = [
@@ -655,19 +419,22 @@ export const CHARACTERS: CharacterConfig[] = [
     id: 'harry',
     name: 'Harry Potter',
     color: '#ff0000',
-    speed: 1.0,
+    speed: 1.8,
+    haunts: ['gryffindor', 'great_hall', 'courtyard', 'hagrids_hut'],
   },
   {
     id: 'hermione',
     name: 'Hermione Granger',
     color: '#0000ff',
-    speed: 0.8,
+    speed: 1.5,
+    haunts: ['library', 'restricted_section', 'gryffindor', 'transfiguration'],
   },
   {
     id: 'ron',
     name: 'Ron Weasley',
     color: '#ffa500',
-    speed: 0.9,
+    speed: 1.6,
+    haunts: ['gryffindor', 'great_hall', 'kitchens'],
   },
 
   // Professors
@@ -675,25 +442,36 @@ export const CHARACTERS: CharacterConfig[] = [
     id: 'dumbledore',
     name: 'Albus Dumbledore',
     color: '#9370db',
-    speed: 0.6,
+    speed: 1.1,
+    haunts: ['dumbledore_office', 'great_hall', 'astronomy_tower'],
   },
   {
     id: 'mcgonagall',
     name: 'Minerva McGonagall',
     color: '#2e8b57',
-    speed: 0.7,
+    speed: 1.3,
+    haunts: ['transfiguration', 'gryffindor', 'great_hall'],
   },
   {
     id: 'snape',
     name: 'Severus Snape',
     color: '#1a1a1a',
-    speed: 0.8,
+    speed: 1.5,
+    haunts: ['potions', 'slytherin', 'dada'],
   },
   {
     id: 'hagrid',
     name: 'Rubeus Hagrid',
     color: '#8b4513',
-    speed: 0.5,
+    speed: 1.0,
+    haunts: ['hagrids_hut', 'greenhouses', 'courtyard', 'great_hall'],
+  },
+  {
+    id: 'filch',
+    name: 'Argus Filch',
+    color: '#6b6b47',
+    speed: 0.9,
+    haunts: ['trophy_room', 'entrance_hall', 'grand_staircase'],
   },
 
   // Other Students
@@ -701,36 +479,42 @@ export const CHARACTERS: CharacterConfig[] = [
     id: 'draco',
     name: 'Draco Malfoy',
     color: '#228b22',
-    speed: 0.9,
+    speed: 1.6,
+    haunts: ['slytherin', 'potions', 'room_of_requirement'],
   },
   {
     id: 'neville',
     name: 'Neville Longbottom',
     color: '#ffd700',
-    speed: 0.7,
+    speed: 1.3,
+    haunts: ['greenhouses', 'gryffindor', 'hospital_wing'],
   },
   {
     id: 'luna',
     name: 'Luna Lovegood',
     color: '#87ceeb',
-    speed: 0.6,
+    speed: 1.1,
+    haunts: ['ravenclaw', 'owlery', 'courtyard', 'divination'],
   },
   {
     id: 'ginny',
     name: 'Ginny Weasley',
     color: '#dc143c',
-    speed: 0.9,
+    speed: 1.6,
+    haunts: ['gryffindor', 'room_of_requirement', 'great_hall'],
   },
   {
     id: 'fred',
     name: 'Fred Weasley',
     color: '#ff6347',
-    speed: 1.1,
+    speed: 2.0,
+    haunts: ['kitchens', 'trophy_room', 'room_of_requirement'],
   },
   {
     id: 'george',
     name: 'George Weasley',
     color: '#ff4500',
-    speed: 1.1,
+    speed: 2.0,
+    haunts: ['kitchens', 'trophy_room', 'room_of_requirement'],
   },
 ];

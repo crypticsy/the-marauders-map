@@ -216,19 +216,12 @@ export class PlayerCharacter {
       // Add corridor path if not the last room
       if (i < roomPath.length - 1) {
         const corridor = this.findCorridorBetween(roomId, roomPath[i + 1]);
-        if (corridor && corridor.navMesh) {
+        if (corridor) {
           const roomA = this.rooms.get(corridor.roomAId);
           const roomB = this.rooms.get(corridor.roomBId);
           if (roomA && roomB) {
-            const corridorWaypoints = corridor.getWaypoints(roomA, roomB);
-            if (corridorWaypoints.length >= 2) {
-              const corridorStart = corridorWaypoints[0];
-              const corridorEnd = corridorWaypoints[corridorWaypoints.length - 1];
-              const corridorNavPath = corridor.navMesh.findPath(corridorStart, corridorEnd);
-              this.currentPath.push(...corridorNavPath);
-            } else {
-              this.currentPath.push(...corridorWaypoints);
-            }
+            // Follow the corridor centerline in the direction of travel
+            this.currentPath.push(...corridor.getPathFrom(roomId, roomA, roomB));
           }
         }
       }
@@ -311,16 +304,8 @@ export class PlayerCharacter {
 
         const newX = this.currentPosition.x + dx * moveRatio;
         const newZ = this.currentPosition.z + dz * moveRatio;
-        const newPosition = { x: newX, z: newZ };
-
-        // Check if new position is walkable
-        if (this.isPositionWalkable(newPosition)) {
-          this.currentPosition = newPosition;
-        } else {
-          // Try to find nearest walkable point
-          const walkablePoint = this.getNearestWalkablePoint(newPosition);
-          this.currentPosition = walkablePoint;
-        }
+        // Click-to-move paths come from the NavMesh, so follow them as-is (see Character.update)
+        this.currentPosition = { x: newX, z: newZ };
 
         // Update current room
         this.updateCurrentRoom();
@@ -382,6 +367,13 @@ export class PlayerCharacter {
         return;
       }
     }
+  }
+
+  /**
+   * Get the ID of the room the player was last seen in
+   */
+  getCurrentRoomId(): string {
+    return this.currentRoomId;
   }
 
   /**

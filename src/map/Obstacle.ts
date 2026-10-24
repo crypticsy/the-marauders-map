@@ -11,6 +11,7 @@ export class ObstacleImpl {
   public size: Vector2;
   public height: number;
   public type: 'furniture' | 'wall' | 'decoration';
+  public shape: 'box' | 'round';
 
   constructor(config: ObstacleConfig, roomPosition: Vector2) {
     this.id = config.id;
@@ -23,6 +24,7 @@ export class ObstacleImpl {
     this.size = config.size;
     this.height = config.height || 1.0;
     this.type = config.type;
+    this.shape = config.shape || 'box';
   }
 
   /**

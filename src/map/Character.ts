@@ -12,6 +12,7 @@ export class Character {
   public name: string;
   public color: string;
   public speed: number;
+  public haunts: string[];
   private currentPosition: Vector2;
   private rooms: Map<string, Room>;
   private corridors: Map<string, Corridor>;
@@ -27,6 +28,7 @@ export class Character {
     this.name = config.name;
     this.color = config.color;
     this.speed = config.speed;
+    this.haunts = config.haunts || [];
     this.currentPosition = { x: 0, z: 0 };
     this.rooms = new Map();
     this.corridors = new Map();
@@ -65,8 +67,9 @@ export class Character {
       this.navigationGraph.get(roomBId)!.push(roomAId);
     });
 
-    // Start in a random room
-    const roomIds = Array.from(rooms.keys());
+    // Start in one of the character's haunts, or anywhere if they have none
+    const knownHaunts = this.haunts.filter((id) => rooms.has(id));
+    const roomIds = knownHaunts.length > 0 ? knownHaunts : Array.from(rooms.keys());
     this.currentRoomId = roomIds[Math.floor(Math.random() * roomIds.length)];
 
     const startRoom = rooms.get(this.currentRoomId);
@@ -90,7 +93,8 @@ export class Character {
     const availableRooms = Array.from(this.rooms.keys());
     this.currentBehavior = this.behaviorSystem.chooseNextBehavior(
       this.currentRoomId,
-      availableRooms
+      availableRooms,
+      this.haunts
     );
 
     console.log(
@@ -238,21 +242,12 @@ export class Character {
       // Add corridor path if not the last room
       if (i < roomPath.length - 1) {
         const corridor = this.findCorridorBetween(roomId, roomPath[i + 1]);
-        if (corridor && corridor.navMesh) {
+        if (corridor) {
           const roomA = this.rooms.get(corridor.roomAId);
           const roomB = this.rooms.get(corridor.roomBId);
           if (roomA && roomB) {
-            const corridorWaypoints = corridor.getWaypoints(roomA, roomB);
-            // Use corridor NavMesh to find path between first and last waypoint
-            if (corridorWaypoints.length >= 2) {
-              const corridorStart = corridorWaypoints[0];
-              const corridorEnd = corridorWaypoints[corridorWaypoints.length - 1];
-              const corridorNavPath = corridor.navMesh.findPath(corridorStart, corridorEnd);
-              this.currentPath.push(...corridorNavPath);
-            } else {
-              // Fallback to direct waypoints if too few
-              this.currentPath.push(...corridorWaypoints);
-            }
+            // Follow the corridor centerline in the direction of travel
+            this.currentPath.push(...corridor.getPathFrom(roomId, roomA, roomB));
           }
         }
       }
@@ -368,65 +363,15 @@ export class Character {
 
         const newX = this.currentPosition.x + dx * moveRatio;
         const newZ = this.currentPosition.z + dz * moveRatio;
-        const newPosition = { x: newX, z: newZ };
-
-        // Check if new position is walkable
-        if (this.isPositionWalkable(newPosition)) {
-          this.currentPosition = newPosition;
-        } else {
-          // Try to find nearest walkable point
-          const walkablePoint = this.getNearestWalkablePoint(newPosition);
-          this.currentPosition = walkablePoint;
-        }
+        // Paths are planned on the NavMesh and corridor centerlines, so follow them as-is.
+        // Re-checking every tiny step against the walkable area rejects moves that graze
+        // a doorway corner by a hair, and snapping back left characters frozen in place.
+        this.currentPosition = { x: newX, z: newZ };
 
         // Update current room based on position
         this.updateCurrentRoom();
       }
     }
-  }
-
-  /**
-   * Check if a position is walkable
-   */
-  private isPositionWalkable(position: Vector2): boolean {
-    // Check if in any room
-    for (const room of this.rooms.values()) {
-      if (room.containsPoint(position)) {
-        return room.isWalkable(position);
-      }
-    }
-
-    // Check if in any corridor
-    for (const corridor of this.corridors.values()) {
-      const roomA = this.rooms.get(corridor.roomAId);
-      const roomB = this.rooms.get(corridor.roomBId);
-      if (roomA && roomB && corridor.containsPoint(position, roomA, roomB)) {
-        return corridor.navMesh ? corridor.navMesh.isWalkable(position) : true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Get nearest walkable point to a position
-   */
-  private getNearestWalkablePoint(position: Vector2): Vector2 {
-    // Try current room first
-    const currentRoom = this.rooms.get(this.currentRoomId);
-    if (currentRoom && currentRoom.containsPoint(position)) {
-      return currentRoom.getNearestWalkablePoint(position);
-    }
-
-    // Check all rooms
-    for (const room of this.rooms.values()) {
-      if (room.containsPoint(position)) {
-        return room.getNearestWalkablePoint(position);
-      }
-    }
-
-    // Return current position as fallback
-    return this.currentPosition;
   }
 
   /**
@@ -442,6 +387,13 @@ export class Character {
         return;
       }
     }
+  }
+
+  /**
+   * Get the ID of the room the character was last seen in
+   */
+  getCurrentRoomId(): string {
+    return this.currentRoomId;
   }
 
   /**

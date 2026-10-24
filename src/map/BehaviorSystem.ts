@@ -11,6 +11,7 @@ export const DEFAULT_BEHAVIOR_CONFIG: BehaviorConfig = {
   maxWaitTime: 6000,
   minRoamTime: 3000,
   maxRoamTime: 8000,
+  hauntChance: 0.6,
 };
 
 /**
@@ -68,7 +69,7 @@ export class BehaviorSystem {
   /**
    * Choose next behavior based on probabilities
    */
-  chooseNextBehavior(currentRoomId: string, availableRooms: string[]): Behavior {
+  chooseNextBehavior(currentRoomId: string, availableRooms: string[], haunts: string[] = []): Behavior {
     const random = Math.random();
     const { waitChance, roamChance } = this.config;
 
@@ -83,7 +84,10 @@ export class BehaviorSystem {
         // No other rooms available, roam instead
         return this.createRoamBehavior(currentRoomId);
       }
-      const targetRoomId = otherRooms[Math.floor(Math.random() * otherRooms.length)];
+      // Characters usually drift back to their favourite haunts
+      const otherHaunts = haunts.filter((id) => id !== currentRoomId && otherRooms.includes(id));
+      const pool = otherHaunts.length > 0 && Math.random() < this.config.hauntChance ? otherHaunts : otherRooms;
+      const targetRoomId = pool[Math.floor(Math.random() * pool.length)];
       return this.createMoveToTargetBehavior(targetRoomId);
     }
   }

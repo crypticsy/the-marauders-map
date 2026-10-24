@@ -1,237 +1,121 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { Corridor } from '../map/Corridor';
 import { Room } from '../map/Room';
+import { Vector2 } from '../map/types';
+import { INK, INK_FADED, FLOOR, WALL_HEIGHT, WALL_THICKNESS, revealDelay, useInkReveal } from './mapTheme';
 
 interface Corridor3DProps {
   corridor: Corridor;
   roomA: Room;
   roomB: Room;
-  isActive: boolean;
 }
 
-interface CorridorSegment {
-  start: THREE.Vector3;
-  end: THREE.Vector3;
-  direction: THREE.Vector3;
+interface Piece {
+  position: [number, number, number];
   length: number;
-  rotation: number;
-  midPoint: THREE.Vector3;
+  rotationY: number;
 }
 
 /**
- * Renders a corridor between two rooms with straight segments and natural bends
- * Structure matches Room3D component for consistency
+ * Offset a polyline sideways, mitring the corners so parallel walls stay
+ * exactly one corridor-width apart around bends
  */
-export const Corridor3D: React.FC<Corridor3DProps> = ({
-  corridor,
-  roomA,
-  roomB,
-  isActive,
-}) => {
-  const waypoints = useMemo(() => {
-    return corridor.getWaypoints(roomA, roomB);
-  }, [corridor, roomA, roomB]);
+const offsetPolyline = (points: Vector2[], distance: number): Vector2[] =>
+  points.map((point, i) => {
+    const normalOf = (from: Vector2, to: Vector2) => {
+      const dx = to.x - from.x;
+      const dz = to.z - from.z;
+      const length = Math.sqrt(dx * dx + dz * dz) || 1;
+      return { x: -dz / length, z: dx / length };
+    };
+    const incoming = i > 0 ? normalOf(points[i - 1], point) : null;
+    const outgoing = i < points.length - 1 ? normalOf(point, points[i + 1]) : null;
 
-  // Create straight corridor segments between waypoints
-  const segments = useMemo(() => {
-    if (waypoints.length < 2) return [];
-
-    const segs: CorridorSegment[] = [];
-
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const start = new THREE.Vector3(waypoints[i].x, 0, waypoints[i].z);
-      const end = new THREE.Vector3(waypoints[i + 1].x, 0, waypoints[i + 1].z);
-
-      const direction = new THREE.Vector3().subVectors(end, start).normalize();
-      const length = start.distanceTo(end);
-      const rotation = Math.atan2(direction.z, direction.x);
-      const midPoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-
-      segs.push({ start, end, direction, length, rotation, midPoint });
+    if (incoming && outgoing) {
+      const scale = distance / (1 + incoming.x * outgoing.x + incoming.z * outgoing.z);
+      return { x: point.x + (incoming.x + outgoing.x) * scale, z: point.z + (incoming.z + outgoing.z) * scale };
     }
+    const normal = (incoming || outgoing)!;
+    return { x: point.x + normal.x * distance, z: point.z + normal.z * distance };
+  });
 
-    return segs;
-  }, [waypoints]);
+/**
+ * Turn a polyline into box placements; `extend` lengthens interior joints
+ * so neighbouring pieces overlap and corners close cleanly
+ */
+const polylinePieces = (points: Vector2[], extend: number, y: number): Piece[] =>
+  points.slice(0, -1).map((start, i) => {
+    const end = points[i + 1];
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    const startExtra = i > 0 ? extend : 0;
+    const endExtra = i < points.length - 2 ? extend : 0;
+    const dirX = dx / (length || 1);
+    const dirZ = dz / (length || 1);
+    const shift = (endExtra - startExtra) / 2;
+    return {
+      position: [(start.x + end.x) / 2 + dirX * shift, y, (start.z + end.z) / 2 + dirZ * shift],
+      length: length + startExtra + endExtra,
+      rotationY: -Math.atan2(dz, dx),
+    };
+  });
 
-  // Create outline border points (similar to Room's outlinePoints)
-  const outlinePoints = useMemo(() => {
-    if (segments.length === 0) return { left: [], right: [] };
-
-    const left: THREE.Vector3[] = [];
-    const right: THREE.Vector3[] = [];
-    const halfWidth = corridor.width / 2;
-
-    segments.forEach((segment) => {
-      const perpX = -segment.direction.z;
-      const perpZ = segment.direction.x;
-
-      left.push(new THREE.Vector3(
-        segment.start.x + perpX * halfWidth,
-        0.03,
-        segment.start.z + perpZ * halfWidth
-      ));
-
-      right.push(new THREE.Vector3(
-        segment.start.x - perpX * halfWidth,
-        0.03,
-        segment.start.z - perpZ * halfWidth
-      ));
-    });
-
-    // Add final end point
-    const lastSegment = segments[segments.length - 1];
-    const perpX = -lastSegment.direction.z;
-    const perpZ = lastSegment.direction.x;
-
-    left.push(new THREE.Vector3(
-      lastSegment.end.x + perpX * halfWidth,
-      0.03,
-      lastSegment.end.z + perpZ * halfWidth
-    ));
-
-    right.push(new THREE.Vector3(
-      lastSegment.end.x - perpX * halfWidth,
-      0.03,
-      lastSegment.end.z - perpZ * halfWidth
-    ));
-
-    return { left, right };
-  }, [segments, corridor.width]);
-
-  if (segments.length === 0 || !isActive) return null;
-
-  const inkColor = '#3d2817';
-  const wallHeight = 1.8;
+/**
+ * Renders a corridor between two rooms: an inked hallway indoors,
+ * or a dashed footpath out on the grounds
+ */
+export const Corridor3D: React.FC<Corridor3DProps> = ({ corridor, roomA, roomB }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const waypoints = useMemo(() => corridor.getWaypoints(roomA, roomB), [corridor, roomA, roomB]);
   const halfWidth = corridor.width / 2;
+  const isPath = corridor.style === 'path';
+
+  const middle = waypoints[Math.floor(waypoints.length / 2)] || { x: 0, z: 0 };
+  useInkReveal(groupRef, revealDelay(middle.x, middle.z));
+
+  const { floors, leftWall, rightWall, leftEdge, rightEdge } = useMemo(() => {
+    const left = offsetPolyline(waypoints, halfWidth);
+    const right = offsetPolyline(waypoints, -halfWidth);
+    const toLine = (points: Vector2[]) => points.map((p) => new THREE.Vector3(p.x, 0.05, p.z));
+    return {
+      floors: polylinePieces(waypoints, halfWidth, 0.015),
+      leftWall: polylinePieces(left, WALL_THICKNESS / 2, WALL_HEIGHT / 2),
+      rightWall: polylinePieces(right, WALL_THICKNESS / 2, WALL_HEIGHT / 2),
+      leftEdge: toLine(left),
+      rightEdge: toLine(right),
+    };
+  }, [waypoints, halfWidth]);
+
+  if (waypoints.length < 2) return null;
 
   return (
-    <group>
-      {/* Floor - similar to Room's floor */}
-      {segments.map((segment, index) => (
-        <mesh
-          key={`floor-${index}`}
-          position={[segment.midPoint.x, 0.02, segment.midPoint.z]}
-          rotation={[-Math.PI / 2, 0, segment.rotation]}
-          castShadow
-          receiveShadow
-        >
-          <planeGeometry args={[segment.length, corridor.width]} />
-          <meshStandardMaterial
-            color={inkColor}
-            transparent
-            opacity={0.12}
-            side={THREE.DoubleSide}
-          />
+    <group ref={groupRef}>
+      {/* Floor */}
+      {floors.map((piece, index) => (
+        <mesh key={`floor-${index}`} position={piece.position} rotation={[-Math.PI / 2, 0, piece.rotationY]}>
+          <planeGeometry args={[piece.length, corridor.width]} />
+          <meshBasicMaterial color={FLOOR} transparent={isPath} opacity={isPath ? 0.55 : 1} />
         </mesh>
       ))}
 
-      {/* Corridor outline border on floor - similar to Room's outline */}
-      <Line points={outlinePoints.left} color={inkColor} lineWidth={2} />
-      <Line points={outlinePoints.right} color={inkColor} lineWidth={2} />
-
-      {/* Walls group - similar to Room's walls */}
-      {segments.map((segment, index) => {
-        const perpX = -segment.direction.z;
-        const perpZ = segment.direction.x;
-
-        return (
-          <group key={`walls-${index}`}>
-            {/* Left wall - runs along corridor, faces inward */}
-            <mesh
-              position={[
-                segment.midPoint.x + perpX * halfWidth,
-                wallHeight / 2,
-                segment.midPoint.z + perpZ * halfWidth,
-              ]}
-              rotation={[0, segment.rotation, 0]}
-              castShadow
-              receiveShadow
-            >
-              <planeGeometry args={[segment.length, wallHeight]} />
-              <meshStandardMaterial
-                color={inkColor}
-                transparent
-                opacity={0.08}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-
-            {/* Right wall - runs along corridor, faces inward */}
-            <mesh
-              position={[
-                segment.midPoint.x - perpX * halfWidth,
-                wallHeight / 2,
-                segment.midPoint.z - perpZ * halfWidth,
-              ]}
-              rotation={[0, segment.rotation + Math.PI, 0]}
-              castShadow
-              receiveShadow
-            >
-              <planeGeometry args={[segment.length, wallHeight]} />
-              <meshStandardMaterial
-                color={inkColor}
-                transparent
-                opacity={0.08}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-          </group>
-        );
-      })}
-
-      {/* Top edge borders - similar to Room's top edges */}
-      <Line
-        points={outlinePoints.left.map(p => new THREE.Vector3(p.x, wallHeight, p.z))}
-        color={inkColor}
-        lineWidth={1.5}
-        opacity={0.4}
-      />
-      <Line
-        points={outlinePoints.right.map(p => new THREE.Vector3(p.x, wallHeight, p.z))}
-        color={inkColor}
-        lineWidth={1.5}
-        opacity={0.4}
-      />
-
-      {/* Arches spanning across corridor - unique to corridors */}
-      {segments.map((segment, segIndex) => {
-        const perpX = -segment.direction.z;
-        const perpZ = segment.direction.x;
-        const numArches = Math.max(2, Math.ceil(segment.length / 2));
-
-        return Array.from({ length: numArches }).map((_, archIndex) => {
-          const t = (archIndex + 0.5) / numArches;
-          const archPos = new THREE.Vector3().lerpVectors(segment.start, segment.end, t);
-          const archPoints: THREE.Vector3[] = [];
-
-          // Create semicircular arch from left to right wall
-          const steps = 10;
-          for (let i = 0; i <= steps; i++) {
-            const archT = i / steps;
-            const angle = Math.PI * archT;
-            const archY = wallHeight + Math.sin(angle) * 0.35;
-            const offsetAcross = (archT - 0.5) * corridor.width;
-
-            archPoints.push(new THREE.Vector3(
-              archPos.x + perpX * offsetAcross,
-              archY,
-              archPos.z + perpZ * offsetAcross
-            ));
-          }
-
-          return (
-            <Line
-              key={`arch-${segIndex}-${archIndex}`}
-              points={archPoints}
-              color={inkColor}
-              lineWidth={1.5}
-              opacity={0.4}
-            />
-          );
-        });
-      })}
+      {isPath ? (
+        // Footpath edges drawn as dashed ink
+        <>
+          <Line points={leftEdge} color={INK_FADED} lineWidth={1.5} dashed dashSize={0.6} gapSize={0.45} />
+          <Line points={rightEdge} color={INK_FADED} lineWidth={1.5} dashed dashSize={0.6} gapSize={0.45} />
+        </>
+      ) : (
+        // Hallway walls
+        [...leftWall, ...rightWall].map((piece, index) => (
+          <mesh key={`wall-${index}`} position={piece.position} rotation={[0, piece.rotationY, 0]}>
+            <boxGeometry args={[piece.length + WALL_THICKNESS / 2, WALL_HEIGHT, WALL_THICKNESS]} />
+            <meshStandardMaterial color={INK} roughness={1} />
+          </mesh>
+        ))
+      )}
     </group>
   );
 };

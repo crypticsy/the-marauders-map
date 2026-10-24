@@ -1,5 +1,12 @@
-import * as THREE from 'three';
 import { RoomConfig, Vector3, Vector2 } from './types';
+
+export type WallSide = 'north' | 'south' | 'east' | 'west';
+
+export interface Doorway {
+  name: string;
+  side: WallSide;
+  offset: Vector2; // Relative to room center
+}
 import { ObstacleImpl } from './Obstacle';
 import { NavMeshImpl } from './NavMesh';
 
@@ -16,9 +23,9 @@ export class Room {
   public connectionPoints: Map<string, Vector2>;
   public obstacles: ObstacleImpl[] = [];
   public navMesh: NavMeshImpl;
-  private mesh: THREE.Group | null = null;
-  private isHovered: boolean = false;
-  private scale: number = 0.01; // For animation
+  public shape: 'rect' | 'round';
+  public floor: 'stone' | 'grass' | 'wood';
+  public labelOffset: Vector2;
 
   constructor(config: RoomConfig) {
     this.id = config.id;
@@ -27,6 +34,9 @@ export class Room {
     this.size = config.size;
     this.color = config.color;
     this.connectionPoints = new Map(Object.entries(config.connectionPoints));
+    this.shape = config.shape || 'rect';
+    this.floor = config.floor || 'stone';
+    this.labelOffset = config.labelOffset || { x: 0, z: 0 };
 
     // Create obstacles
     if (config.obstacles) {
@@ -37,7 +47,66 @@ export class Room {
 
     // Create NavMesh for this room (finer grid for better navigation)
     const bounds = this.getRoomBounds();
-    this.navMesh = new NavMeshImpl(bounds, this.obstacles, 0.2);
+    this.navMesh = new NavMeshImpl(bounds, this.obstacles, 0.2, (point) => this.isOffFloor(point));
+  }
+
+  /**
+   * Radius of a round room (towers); size.x is the diameter
+   */
+  getRadius(): number {
+    return this.size.x / 2;
+  }
+
+  /**
+   * Keep navigation on the room's floor: the interior (85% of the room, which
+   * leaves space for the walls) plus a passage through each doorway. Without this
+   * the padded NavMesh bounds leak into a strip outside the walls, where paths
+   * get planned but movement is refused, leaving characters stuck.
+   */
+  private isOffFloor(point: Vector2): boolean {
+    const dx = point.x - this.position.x;
+    const dz = point.z - this.position.z;
+    const halfWidth = this.size.x / 2;
+    const halfDepth = this.size.z / 2;
+
+    // Never outside the room's own footprint
+    if (Math.abs(dx) > halfWidth + 0.01 || Math.abs(dz) > halfDepth + 0.01) return true;
+
+    const inInterior =
+      this.shape === 'round'
+        ? Math.sqrt(dx * dx + dz * dz) <= this.getRadius() * 0.82
+        : Math.abs(dx) <= halfWidth * 0.85 && Math.abs(dz) <= halfDepth * 0.85;
+    if (inInterior) return false;
+
+    // Doorways reach far enough to join up with the interior
+    return !this.getDoorways().some((door) => {
+      const depth = door.side === 'east' || door.side === 'west' ? halfWidth : halfDepth;
+      const reach = depth * (this.shape === 'round' ? 0.18 : 0.15) + 0.8;
+      return Math.sqrt((dx - door.offset.x) ** 2 + (dz - door.offset.z) ** 2) < reach;
+    });
+  }
+
+  /**
+   * Describe each connection point as a doorway on one of the four walls
+   */
+  getDoorways(): Doorway[] {
+    const halfWidth = this.size.x / 2;
+    const halfDepth = this.size.z / 2;
+    const doorways: Doorway[] = [];
+
+    this.connectionPoints.forEach((offset, name) => {
+      // Pick the wall the point sits closest to
+      const distances: Array<[WallSide, number]> = [
+        ['north', Math.abs(offset.z + halfDepth)],
+        ['south', Math.abs(offset.z - halfDepth)],
+        ['east', Math.abs(offset.x - halfWidth)],
+        ['west', Math.abs(offset.x + halfWidth)],
+      ];
+      distances.sort((a, b) => a[1] - b[1]);
+      doorways.push({ name, side: distances[0][0], offset });
+    });
+
+    return doorways;
   }
 
   /**
@@ -153,35 +222,5 @@ export class Room {
    */
   getNearestWalkablePoint(point: Vector2): Vector2 {
     return this.navMesh.getNearestWalkablePoint(point);
-  }
-
-  /**
-   * Update animation state
-   */
-  update(isActive: boolean, isHovered: boolean): void {
-    this.isHovered = isHovered;
-    const targetScale = isActive ? (isHovered ? 1.2 : 1.0) : 0.01;
-    this.scale += (targetScale - this.scale) * 0.1;
-  }
-
-  /**
-   * Get current scale for rendering
-   */
-  getScale(): number {
-    return this.scale;
-  }
-
-  /**
-   * Get render opacity based on hover state
-   */
-  getOpacity(): number {
-    return this.isHovered ? 0.5 : 0.3;
-  }
-
-  /**
-   * Get emissive intensity based on hover state
-   */
-  getEmissiveIntensity(): number {
-    return this.isHovered ? 0.3 : 0.1;
   }
 }

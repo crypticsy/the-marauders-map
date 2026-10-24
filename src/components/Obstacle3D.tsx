@@ -1,57 +1,32 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { Edges } from '@react-three/drei';
+import * as THREE from 'three';
 import { ObstacleImpl } from '../map/Obstacle';
+import { INK, revealDelay, useInkReveal } from './mapTheme';
 
 interface Obstacle3DProps {
   obstacle: ObstacleImpl;
-  isActive: boolean;
 }
 
 /**
- * Renders an obstacle (furniture, wall, decoration) in 3D
+ * Renders furniture as an inked outline over a parchment-coloured block
  */
-export const Obstacle3D: React.FC<Obstacle3DProps> = ({ obstacle, isActive }) => {
-  if (!isActive) return null;
-
-  const getColor = () => {
-    switch (obstacle.type) {
-      case 'furniture':
-        return '#8B4513'; // Brown
-      case 'wall':
-        return '#696969'; // Dark gray
-      case 'decoration':
-        return '#DAA520'; // Goldenrod
-      default:
-        return '#888888';
-    }
-  };
-
-  const getOpacity = () => {
-    switch (obstacle.type) {
-      case 'furniture':
-        return 0.4;
-      case 'wall':
-        return 0.6;
-      case 'decoration':
-        return 0.3;
-      default:
-        return 0.4;
-    }
-  };
+export const Obstacle3D: React.FC<Obstacle3DProps> = ({ obstacle }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const { x, z } = obstacle.position;
+  useInkReveal(groupRef, revealDelay(x, z) + 0.3);
 
   return (
-    <mesh
-      position={[obstacle.position.x, obstacle.height / 2, obstacle.position.z]}
-      castShadow
-      receiveShadow
-    >
-      <boxGeometry args={[obstacle.size.x, obstacle.height, obstacle.size.z]} />
-      <meshStandardMaterial
-        color={getColor()}
-        transparent
-        opacity={getOpacity()}
-        roughness={0.8}
-        metalness={0.1}
-      />
-    </mesh>
+    <group ref={groupRef} position={[x, obstacle.height / 2, z]}>
+      <mesh>
+        {obstacle.shape === 'round' ? (
+          <cylinderGeometry args={[obstacle.size.x / 2, obstacle.size.x / 2, obstacle.height, 28]} />
+        ) : (
+          <boxGeometry args={[obstacle.size.x, obstacle.height, obstacle.size.z]} />
+        )}
+        <meshStandardMaterial color="#d6b98a" roughness={1} />
+        <Edges color={INK} threshold={20} />
+      </mesh>
+    </group>
   );
 };

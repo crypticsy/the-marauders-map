@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useState, useRef, useEffect } from 'react';
+import React, { Suspense, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { IoCloseCircleOutline, IoFootsteps, IoInformationCircleOutline } from 'react-icons/io5';
@@ -8,13 +8,18 @@ import { Room } from '../map/Room';
 import { Corridor } from '../map/Corridor';
 import { Character } from '../map/Character';
 import { PlayerCharacter } from '../map/PlayerCharacter';
-import { ROOMS, CORRIDORS, CHARACTERS } from '../map/MapData';
+import { ROOMS, CORRIDORS, CHARACTERS, DECORATIONS, MAP_BOUNDS } from '../map/MapData';
 import { Room3D } from './Room3D';
 import { Corridor3D } from './Corridor3D';
 import { Character3D } from './Character3D';
 import { MagicParticles } from './Particles3D';
 import { Obstacle3D } from './Obstacle3D';
 import { MobileJoystick } from './MobileJoystick';
+import { Parchment, TitleCartouche, CompassRose, Grounds3D } from './Grounds3D';
+
+// Overview camera framing for the whole parchment
+const OVERVIEW_TARGET = new THREE.Vector3(0, 0, 2);
+const OVERVIEW_POSITION = new THREE.Vector3(0, 112, 78);
 
 // Camera Follow Component
 interface CameraFollowProps {
@@ -48,8 +53,8 @@ const CameraFollow: React.FC<CameraFollowProps> = ({ character, controlsRef }) =
         isResettingRef.current = false;
       } else if (previousCharacterRef.current !== null && !isResettingRef.current) {
         // Just switched to Overview mode - reset once
-        const defaultTarget = new THREE.Vector3(0, 0, 0);
-        const defaultCameraPos = new THREE.Vector3(0, 85, 85);
+        const defaultTarget = OVERVIEW_TARGET;
+        const defaultCameraPos = OVERVIEW_POSITION;
 
         // Check if we're close enough to default position
         const distanceToDefault = camera.position.distanceTo(defaultCameraPos);
@@ -166,7 +171,7 @@ const ClickToMove: React.FC<ClickToMoveProps> = ({ enabled, player }) => {
     if (!enabled || !player) return;
 
     // Get the clicked point in 3D space
-    const point = event.point;
+    const { point } = event as unknown as { point: THREE.Vector3 };
 
     // Set target position for player (convert 3D to 2D)
     player.setTargetPosition({ x: point.x, z: point.z });
@@ -177,10 +182,10 @@ const ClickToMove: React.FC<ClickToMoveProps> = ({ enabled, player }) => {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.01, 0]}
+      position={[(MAP_BOUNDS.minX + MAP_BOUNDS.maxX) / 2, 0.01, (MAP_BOUNDS.minZ + MAP_BOUNDS.maxZ) / 2]}
       onClick={handleMapClick}
     >
-      <planeGeometry args={[100, 100]} />
+      <planeGeometry args={[MAP_BOUNDS.maxX - MAP_BOUNDS.minX, MAP_BOUNDS.maxZ - MAP_BOUNDS.minZ]} />
       <meshBasicMaterial transparent opacity={0} />
     </mesh>
   );
@@ -198,6 +203,9 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
   const [playerMode, setPlayerMode] = useState<boolean>(false);
   const [playerCharacter, setPlayerCharacter] = useState<PlayerCharacter | null>(null);
   const [joystickDirection, setJoystickDirection] = useState<Vector2 | null>(null);
+  const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
+  const [locations, setLocations] = useState<Record<string, string>>({});
+  const [showFootprints, setShowFootprints] = useState(false);
   const controlsRef = useRef<any>(null);
 
   // Initialize map objects
@@ -235,6 +243,25 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
     return map;
   }, [rooms]);
 
+  // Doorway widths per room, so walls leave a gap exactly as wide as each corridor
+  const doorWidthsByRoom = useMemo(() => {
+    const widths = new Map<string, Record<string, number>>();
+    rooms.forEach((room) => widths.set(room.id, {}));
+    corridors.forEach(([, corridor]) => {
+      widths.get(corridor.roomAId)![corridor.connectionA] = corridor.width;
+      widths.get(corridor.roomBId)![corridor.connectionB] = corridor.width;
+    });
+    return widths;
+  }, [rooms, corridors]);
+
+  // Footprints appear once the castle has inked itself onto the parchment
+  useEffect(() => {
+    const timer = setTimeout(() => setShowFootprints(true), 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleRoomHover = useCallback((roomId: string | null) => setHoveredRoomId(roomId), []);
+
   // Initialize player character when entering player mode
   useEffect(() => {
     if (playerMode && !playerCharacter) {
@@ -264,6 +291,30 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
   const followTarget = playerMode && playerCharacter
     ? playerCharacter
     : selectedCharacter;
+
+  // Poll where everyone is, for the location readouts
+  useEffect(() => {
+    const updateLocations = () => {
+      const next: Record<string, string> = {};
+      characters.forEach((c) => (next[c.id] = c.getCurrentRoomId()));
+      if (playerCharacter) next[playerCharacter.id] = playerCharacter.getCurrentRoomId();
+      setLocations(next);
+    };
+    updateLocations();
+    const interval = setInterval(updateLocations, 500);
+    return () => clearInterval(interval);
+  }, [characters, playerCharacter]);
+
+  const roomName = (roomId: string | undefined) => (roomId ? roomMap.get(roomId)?.name : undefined);
+
+  const hoveredRoom = hoveredRoomId ? roomMap.get(hoveredRoomId) : null;
+  const hoveredOccupants = hoveredRoomId
+    ? [
+        ...characters.filter((c) => locations[c.id] === hoveredRoomId).map((c) => c.name),
+        ...(playerCharacter && locations[playerCharacter.id] === hoveredRoomId ? ['You'] : []),
+      ]
+    : [];
+  const followedLocation = followTarget ? roomName(locations[followTarget.id]) : undefined;
 
   return (
     <div className="w-screen h-screen bg-[#e8dcc4] parchment-texture overflow-hidden relative">
@@ -430,13 +481,36 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
                     }}
                     className="px-3 py-2 sm:px-4 sm:py-2 md:px-6 md:py-3 text-[#e8dcc4] cursor-pointer hover:bg-black/50 text-2xs sm:text-xs md:text-sm whitespace-nowrap"
                   >
-                    Follow {char.name}
+                    <div>Follow {char.name}</div>
+                    <div className="text-3xs sm:text-2xs opacity-60 italic">{roomName(locations[char.id]) ?? '…'}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
         </div>
+
+        {/* Location readout - who is in the hovered room, or where the followed person is */}
+        {(hoveredRoom || followedLocation) && (
+          <div
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:bottom-6 z-40 px-4 py-2 sm:px-6 sm:py-3 bg-black/85 backdrop-blur-sm rounded shadow-xl text-[#e8dcc4] text-center pointer-events-none max-w-[90vw]"
+            style={{ fontFamily: "'IM Fell English', serif", letterSpacing: '0.05em' }}
+          >
+            {hoveredRoom ? (
+              <>
+                <div className="text-xs sm:text-sm md:text-base">{hoveredRoom.name}</div>
+                <div className="text-2xs sm:text-xs opacity-70 italic mt-0.5">
+                  {hoveredOccupants.length > 0 ? hoveredOccupants.join(', ') : 'Nobody here… or so it seems'}
+                </div>
+              </>
+            ) : (
+              <div className="text-xs sm:text-sm">
+                {playerMode ? 'You are in' : `${followTarget?.name} is in`}{' '}
+                <span className="italic">{followedLocation}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Title - left side */}
         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 md:top-6 md:left-6 z-50 flex items-center justify-center flex-col">
@@ -482,18 +556,21 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
         </div>
 
       {/* 3D Canvas */}
-      <Canvas shadows>
-        <Suspense>
-          <PerspectiveCamera makeDefault position={[0, 85, 85]} fov={60} />
+      <Canvas dpr={[1, 2]}>
+        <Suspense fallback={null}>
+          <PerspectiveCamera makeDefault position={OVERVIEW_POSITION.toArray()} fov={50} near={0.5} far={600} />
           <OrbitControls
             ref={controlsRef}
+            target={OVERVIEW_TARGET}
             enablePan={true}
             enableZoom={true}
             enableRotate={true}
-            maxPolarAngle={Math.PI / 2.1}
-            minPolarAngle={Math.PI / 6}
-            minDistance={15}
-            maxDistance={120}
+            enableDamping
+            dampingFactor={0.08}
+            maxPolarAngle={Math.PI / 2.6}
+            minPolarAngle={0}
+            minDistance={10}
+            maxDistance={180}
           />
 
           {/* Camera follow for selected character or player */}
@@ -508,194 +585,51 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
           {/* Click-to-move handler */}
           <ClickToMove enabled={playerMode} player={playerCharacter} />
 
-          {/* Gentle lighting for old map aesthetic */}
-          <ambientLight intensity={0.3} />
-          <hemisphereLight
-            color="#f5e6d3"
-            groundColor="#d4b896"
-            intensity={0.25}
-            position={[0, 50, 0]}
-          />
-          <directionalLight
-            position={[50, 50, 50]}
-            intensity={0.15}
-            castShadow
-            shadow-camera-left={-60}
-            shadow-camera-right={60}
-            shadow-camera-top={60}
-            shadow-camera-bottom={-60}
-            shadow-camera-near={0.1}
-            shadow-camera-far={200}
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-          />
-          <directionalLight
-            position={[-50, 40, -50]}
-            intensity={0.1}
-          />
+          {/* Soft, warm light so inked walls keep a little depth */}
+          <ambientLight intensity={0.75} color="#fff4e0" />
+          <directionalLight position={[30, 60, 40]} intensity={0.55} color="#fff1d6" />
 
-          {/* Old map base - visible faded orangish parchment */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-            <planeGeometry args={[100, 100]} />
-            <meshStandardMaterial
-              color="#d9b382"
-              roughness={0.95}
-              metalness={0.0}
-              emissive="#c9a577"
-              emissiveIntensity={0.2}
-            />
-          </mesh>
+          {/* The parchment, its border and title */}
+          <Parchment />
+          <TitleCartouche />
+          <CompassRose position={{ x: MAP_BOUNDS.minX + 11, z: MAP_BOUNDS.minZ + 11 }} size={13} />
 
-          {/* Burnt/aged edges effect - balanced visibility */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-            <planeGeometry args={[100, 100]} />
-            <meshBasicMaterial
-              transparent
-              opacity={0.25}
-              depthWrite={false}
-            >
-              <primitive
-                attach="map"
-                object={(() => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = 512;
-                  canvas.height = 512;
-                  const ctx = canvas.getContext('2d')!;
+          {/* Grounds, secret passages and other markings */}
+          <Grounds3D decorations={DECORATIONS} />
 
-                  // Create visible but gentle radial gradient for aged edges
-                  const gradient = ctx.createRadialGradient(256, 256, 170, 256, 256, 256);
-                  gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                  gradient.addColorStop(0.72, 'rgba(70, 50, 35, 0)');
-                  gradient.addColorStop(0.86, 'rgba(60, 45, 30, 0.25)');
-                  gradient.addColorStop(0.94, 'rgba(50, 38, 25, 0.45)');
-                  gradient.addColorStop(1, 'rgba(45, 32, 20, 0.65)');
-
-                  ctx.fillStyle = gradient;
-                  ctx.fillRect(0, 0, 512, 512);
-
-                  // Add soft, blurry irregular aged marks around edges
-                  for (let i = 0; i < 18; i++) {
-                    const angle = (Math.PI * 2 * i) / 18;
-                    const radius = 242 + Math.random() * 18;
-                    const x = 256 + Math.cos(angle) * radius;
-                    const y = 256 + Math.sin(angle) * radius;
-                    const size = 10 + Math.random() * 14;
-                    const baseOpacity = 0.2 + Math.random() * 0.15;
-
-                    // Create soft blurry spot with radial gradient
-                    const blurGradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-                    blurGradient.addColorStop(0, `rgba(${55 + Math.random() * 18}, ${40 + Math.random() * 12}, ${28 + Math.random() * 10}, ${baseOpacity})`);
-                    blurGradient.addColorStop(0.4, `rgba(${60 + Math.random() * 15}, ${42 + Math.random() * 10}, ${30 + Math.random() * 8}, ${baseOpacity * 0.6})`);
-                    blurGradient.addColorStop(0.7, `rgba(${65 + Math.random() * 12}, ${45 + Math.random() * 8}, ${32 + Math.random() * 8}, ${baseOpacity * 0.3})`);
-                    blurGradient.addColorStop(1, 'rgba(70, 50, 35, 0)');
-
-                    ctx.fillStyle = blurGradient;
-                    ctx.beginPath();
-                    ctx.arc(x, y, size, 0, Math.PI * 2);
-                    ctx.fill();
-                  }
-
-                  const texture = new THREE.CanvasTexture(canvas);
-                  texture.needsUpdate = true;
-                  return texture;
-                })()}
-              />
-            </meshBasicMaterial>
-          </mesh>
-
-          {/* Age spots and stains - visible but gentle */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-            <planeGeometry args={[100, 100]} />
-            <meshBasicMaterial
-              transparent
-              opacity={0.18}
-              depthWrite={false}
-            >
-              <primitive
-                attach="map"
-                object={(() => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = 512;
-                  canvas.height = 512;
-                  const ctx = canvas.getContext('2d')!;
-
-                  // Add noticeable but gentle age spots with soft blur
-                  for (let i = 0; i < 25; i++) {
-                    const x = Math.random() * 512;
-                    const y = Math.random() * 512;
-                    const size = 6 + Math.random() * 14;
-                    const opacity = 0.15 + Math.random() * 0.12;
-
-                    // Create soft blurry spot with 4-stop radial gradient
-                    const spotGradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-                    spotGradient.addColorStop(0, `rgba(100, 75, 50, ${opacity})`);
-                    spotGradient.addColorStop(0.4, `rgba(95, 70, 48, ${opacity * 0.7})`);
-                    spotGradient.addColorStop(0.7, `rgba(90, 68, 45, ${opacity * 0.4})`);
-                    spotGradient.addColorStop(1, 'rgba(90, 68, 45, 0)');
-
-                    ctx.fillStyle = spotGradient;
-                    ctx.beginPath();
-                    ctx.arc(x, y, size, 0, Math.PI * 2);
-                    ctx.fill();
-                  }
-
-                  // Add visible water stain rings
-                  for (let i = 0; i < 6; i++) {
-                    const x = Math.random() * 512;
-                    const y = Math.random() * 512;
-                    const size = 22 + Math.random() * 38;
-
-                    ctx.strokeStyle = `rgba(110, 85, 60, ${0.08 + Math.random() * 0.08})`;
-                    ctx.lineWidth = 2 + Math.random() * 2.5;
-                    ctx.beginPath();
-                    ctx.arc(x, y, size, 0, Math.PI * 2);
-                    ctx.stroke();
-                  }
-
-                  const texture = new THREE.CanvasTexture(canvas);
-                  texture.needsUpdate = true;
-                  return texture;
-                })()}
-              />
-            </meshBasicMaterial>
-          </mesh>
-
-          {/* Render all corridors (hand-drawn style, no grids) */}
+          {/* Render all corridors */}
           {corridors.map(([id, corridor]) => {
             const roomA = roomMap.get(corridor.roomAId);
             const roomB = roomMap.get(corridor.roomBId);
             if (!roomA || !roomB) return null;
 
-            return (
-              <Corridor3D
-                key={id}
-                corridor={corridor}
-                roomA={roomA}
-                roomB={roomB}
-                isActive={isActive}
-              />
-            );
+            return <Corridor3D key={id} corridor={corridor} roomA={roomA} roomB={roomB} />;
           })}
 
           {/* Render all rooms */}
           {rooms.map((room) => (
-            <Room3D key={room.id} room={room} isActive={isActive} />
+            <Room3D
+              key={room.id}
+              room={room}
+              doorWidths={doorWidthsByRoom.get(room.id)!}
+              isHovered={hoveredRoomId === room.id}
+              onHoverChange={handleRoomHover}
+            />
           ))}
 
           {/* Render all obstacles in rooms */}
           {rooms.map((room) =>
-            room.obstacles.map((obstacle) => (
-              <Obstacle3D
-                key={obstacle.id}
-                obstacle={obstacle}
-                isActive={isActive}
-              />
-            ))
+            room.obstacles.map((obstacle) => <Obstacle3D key={obstacle.id} obstacle={obstacle} />)
           )}
 
           {/* Render all characters with animated footsteps */}
           {characters.map((character) => (
-            <Character3D key={character.id} character={character} isActive={isActive} />
+            <Character3D
+              key={character.id}
+              character={character}
+              isActive={isActive && showFootprints}
+              isHighlighted={character.id === selectedCharacterId}
+            />
           ))}
 
           {/* Render player character */}
@@ -704,11 +638,12 @@ export const MaraudersMap3D: React.FC<MaraudersMap3DProps> = ({ isActive, isClos
               key="player"
               character={playerCharacter}
               isActive={isActive}
+              isHighlighted
             />
           )}
 
           {/* Magical Particles */}
-          <MagicParticles count={150} isActive={isActive} />
+          <MagicParticles count={220} isActive={isActive} />
         </Suspense>
       </Canvas>
       </div>

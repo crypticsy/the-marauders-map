@@ -17,9 +17,9 @@ export const MagicParticles: React.FC<MagicParticlesProps> = ({ count = 100, isA
 
     for (let i = 0; i < count; i++) {
       // Position
-      positions[i * 3] = (Math.random() - 0.5) * 30;
+      positions[i * 3] = (Math.random() - 0.5) * 130;
       positions[i * 3 + 1] = Math.random() * 15;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
 
       // Color (golden magical glow)
       const goldenColor = new THREE.Color('#ffd700');
@@ -71,7 +71,7 @@ export const MagicParticles: React.FC<MagicParticlesProps> = ({ count = 100, isA
         />
       </bufferGeometry>
       <pointsMaterial
-        size={0.1}
+        size={0.22}
         vertexColors
         transparent
         opacity={0.6}

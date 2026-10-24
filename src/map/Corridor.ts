@@ -13,6 +13,7 @@ export class Corridor {
   public connectionA: string;
   public connectionB: string;
   public width: number;
+  public style: 'hall' | 'path';
   private waypoints: Vector2[];
   public navMesh: NavMeshImpl | null = null;
   private fullPath: Vector2[] = [];
@@ -24,6 +25,7 @@ export class Corridor {
     this.connectionA = config.connectionA;
     this.connectionB = config.connectionB;
     this.width = config.width;
+    this.style = config.style || 'hall';
     this.waypoints = config.waypoints || [];
   }
 
@@ -164,6 +166,16 @@ export class Corridor {
     const pdz = point.z - projectionZ;
 
     return Math.sqrt(pdx * pdx + pdz * pdz);
+  }
+
+  /**
+   * Get the corridor's centerline oriented for travel out of the given room.
+   * Corridors have no obstacles, so the centerline itself is the path; this also
+   * keeps travellers inside bent corridors instead of cutting across the parchment.
+   */
+  getPathFrom(fromRoomId: string, roomA: Room, roomB: Room): Vector2[] {
+    const path = this.generatePath(roomA, roomB);
+    return fromRoomId === this.roomBId ? path.reverse() : path;
   }
 
   /**

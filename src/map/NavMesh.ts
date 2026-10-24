@@ -2,18 +2,43 @@ import { Vector2, NavNode } from './types';
 import { ObstacleImpl } from './Obstacle';
 
 /**
- * Priority Queue for A* pathfinding
+ * Binary-heap priority queue for A* pathfinding
  */
 class PriorityQueue<T> {
   private items: Array<{ item: T; priority: number }> = [];
 
   enqueue(item: T, priority: number): void {
-    this.items.push({ item, priority });
-    this.items.sort((a, b) => a.priority - b.priority);
+    const items = this.items;
+    items.push({ item, priority });
+    let i = items.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (items[parent].priority <= items[i].priority) break;
+      [items[parent], items[i]] = [items[i], items[parent]];
+      i = parent;
+    }
   }
 
   dequeue(): T | undefined {
-    return this.items.shift()?.item;
+    const items = this.items;
+    if (items.length === 0) return undefined;
+    const top = items[0];
+    const last = items.pop()!;
+    if (items.length > 0) {
+      items[0] = last;
+      let i = 0;
+      for (;;) {
+        const left = i * 2 + 1;
+        const right = left + 1;
+        let smallest = i;
+        if (left < items.length && items[left].priority < items[smallest].priority) smallest = left;
+        if (right < items.length && items[right].priority < items[smallest].priority) smallest = right;
+        if (smallest === i) break;
+        [items[smallest], items[i]] = [items[i], items[smallest]];
+        i = smallest;
+      }
+    }
+    return top.item;
   }
 
   isEmpty(): boolean {
@@ -33,15 +58,18 @@ export class NavMeshImpl {
 
   private grid: Map<string, NavNode> = new Map();
   private obstacles: ObstacleImpl[];
+  private isBlocked: (point: Vector2) => boolean;
 
   constructor(
     bounds: { min: Vector2; max: Vector2 },
     obstacles: ObstacleImpl[],
-    gridSize: number = 0.3
+    gridSize: number = 0.3,
+    isBlocked: (point: Vector2) => boolean = () => false // Extra shape constraint (e.g. round towers)
   ) {
     this.bounds = bounds;
     this.obstacles = obstacles;
     this.gridSize = gridSize;
+    this.isBlocked = isBlocked;
 
     this.buildNavMesh();
   }
@@ -112,9 +140,11 @@ export class NavMeshImpl {
    * Get grid key for a position
    */
   private getGridKey(position: Vector2): string {
-    const x = Math.round(position.x / this.gridSize) * this.gridSize;
-    const z = Math.round(position.z / this.gridSize) * this.gridSize;
-    return `${x.toFixed(2)},${z.toFixed(2)}`;
+    // Index relative to the grid origin; rounding absolute coordinates breaks
+    // whenever the bounds don't start on a multiple of the grid size
+    const x = Math.round((position.x - this.bounds.min.x) / this.gridSize);
+    const z = Math.round((position.z - this.bounds.min.z) / this.gridSize);
+    return `${x},${z}`;
   }
 
   /**
@@ -147,16 +177,27 @@ export class NavMeshImpl {
    * Check if a point is inside any obstacle
    */
   private isPointInObstacle(point: Vector2): boolean {
-    return this.obstacles.some((obstacle) => obstacle.containsPoint(point));
+    return this.isBlocked(point) || this.obstacles.some((obstacle) => obstacle.containsPoint(point));
   }
 
   /**
    * Check if a line intersects with any obstacle
    */
   private lineIntersectsObstacles(start: Vector2, end: Vector2): boolean {
-    return this.obstacles.some((obstacle) =>
-      obstacle.intersectsLineSegment(start, end)
-    );
+    if (this.obstacles.some((obstacle) => obstacle.intersectsLineSegment(start, end))) {
+      return true;
+    }
+
+    // Sample along the line so shortcuts can't cut through blocked floor
+    const length = Math.sqrt((end.x - start.x) ** 2 + (end.z - start.z) ** 2);
+    const samples = Math.ceil(length / (this.gridSize / 2));
+    for (let i = 1; i < samples; i++) {
+      const t = i / samples;
+      if (this.isBlocked({ x: start.x + (end.x - start.x) * t, z: start.z + (end.z - start.z) * t })) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -222,12 +263,6 @@ export class NavMeshImpl {
     const gScore = new Map<number, number>();
     const fScore = new Map<number, number>();
 
-    // Initialize scores
-    this.nodes.forEach((node) => {
-      gScore.set(node.id, Infinity);
-      fScore.set(node.id, Infinity);
-    });
-
     gScore.set(startNode.id, 0);
     fScore.set(startNode.id, this.distance(startNode.position, endNode.position));
     openSet.enqueue(startNode.id, fScore.get(startNode.id)!);
@@ -244,20 +279,23 @@ export class NavMeshImpl {
         return [start, ...path, end];
       }
 
+      if (closedSet.has(currentId)) {
+        continue; // Stale queue entry superseded by a cheaper route
+      }
       closedSet.add(currentId);
-      const currentNode = this.nodes.find((n) => n.id === currentId)!;
+      const currentNode = this.nodes[currentId]; // Node IDs match their index
 
       currentNode.neighbors.forEach((neighborId) => {
         if (closedSet.has(neighborId)) {
           return;
         }
 
-        const neighbor = this.nodes.find((n) => n.id === neighborId)!;
+        const neighbor = this.nodes[neighborId];
         const tentativeGScore =
           gScore.get(currentId)! +
           this.distance(currentNode.position, neighbor.position);
 
-        if (tentativeGScore < gScore.get(neighborId)!) {
+        if (tentativeGScore < (gScore.get(neighborId) ?? Infinity)) {
           cameFrom.set(neighborId, currentId);
           gScore.set(neighborId, tentativeGScore);
           fScore.set(
@@ -278,14 +316,12 @@ export class NavMeshImpl {
    */
   private reconstructPath(cameFrom: Map<number, number>, current: number): Vector2[] {
     const path: Vector2[] = [];
-    const currentNode = this.nodes.find((n) => n.id === current)!;
-    path.unshift(currentNode.position);
+    path.unshift(this.nodes[current].position);
 
     let currentId = current;
     while (cameFrom.has(currentId)) {
       currentId = cameFrom.get(currentId)!;
-      const node = this.nodes.find((n) => n.id === currentId)!;
-      path.unshift(node.position);
+      path.unshift(this.nodes[currentId].position);
     }
 
     // Simplify path by removing unnecessary waypoints

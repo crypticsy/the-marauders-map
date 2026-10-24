@@ -19,6 +19,9 @@ export interface RoomConfig {
   color: string;
   connectionPoints: { [key: string]: Vector2 }; // e.g., { north: {x, z}, south: {x, z} }
   obstacles?: ObstacleConfig[]; // Furniture and obstacles in the room
+  shape?: 'rect' | 'round'; // Round rooms (towers) use size.x as diameter
+  floor?: 'stone' | 'grass' | 'wood'; // Floor pattern drawn on the parchment
+  labelOffset?: Vector2; // Nudge the room name away from furniture
 }
 
 export interface CorridorConfig {
@@ -29,6 +32,7 @@ export interface CorridorConfig {
   connectionB: string; // Connection point name on roomB
   waypoints?: Vector2[]; // Optional waypoints for curved corridors
   width: number;
+  style?: 'hall' | 'path'; // Indoor hallway with walls, or an outdoor path across the grounds
 }
 
 export interface CharacterConfig {
@@ -36,6 +40,7 @@ export interface CharacterConfig {
   name: string;
   color: string;
   speed: number; // Units per second
+  haunts?: string[]; // Room IDs this character tends to drift back to
 }
 
 export type PathSegment = {
@@ -52,6 +57,7 @@ export interface ObstacleConfig {
   size: Vector2; // Width and depth
   height?: number; // Height for rendering (default 1.0)
   type: 'furniture' | 'wall' | 'decoration';
+  shape?: 'box' | 'round';
 }
 
 export interface Obstacle {
@@ -61,6 +67,7 @@ export interface Obstacle {
   size: Vector2;
   height: number;
   type: 'furniture' | 'wall' | 'decoration';
+  shape: 'box' | 'round';
   containsPoint(point: Vector2): boolean;
   getExpandedBounds(padding: number): { min: Vector2; max: Vector2 };
 }
@@ -106,4 +113,15 @@ export interface BehaviorConfig {
   maxWaitTime: number; // milliseconds
   minRoamTime: number; // milliseconds
   maxRoamTime: number; // milliseconds
+  hauntChance: number; // 0-1 probability a room move targets one of the character's haunts
 }
+
+// Decorative, non-walkable features drawn on the parchment (grounds, passages...)
+export type DecorationConfig =
+  | { kind: 'lake'; id: string; name: string; outline: Vector2[] }
+  | { kind: 'forest'; id: string; name: string; outline: Vector2[]; density: number }
+  | { kind: 'pitch'; id: string; name: string; position: Vector2; size: Vector2 }
+  | { kind: 'tree'; id: string; name: string; position: Vector2; radius: number }
+  | { kind: 'passage'; id: string; name: string; points: Vector2[] }
+  | { kind: 'stairs'; id: string; position: Vector2; size: Vector2; direction: 'x' | 'z' }
+  | { kind: 'label'; id: string; name: string; position: Vector2; size: number; rotation?: number };

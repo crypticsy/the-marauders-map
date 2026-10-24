@@ -1,259 +1,279 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Text } from '@react-three/drei';
+import { Billboard, Line, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Character } from '../map/Character';
 import { PlayerCharacter } from '../map/PlayerCharacter';
+import { INK, PARCHMENT, FONT_ITALIC, seededRandom } from './mapTheme';
 
 interface Character3DProps {
   character: Character | PlayerCharacter;
   isActive: boolean;
+  isHighlighted?: boolean;
 }
 
-// Create footprint texture using canvas (much simpler than geometry!)
-const createFootprintTexture = (): THREE.Texture => {
+interface Footprint {
+  x: number;
+  z: number;
+  rotation: number;
+  isLeft: boolean;
+  born: number; // Clock time the print was stamped
+}
+
+const TRAIL_STEPS = 6; // Prints visible behind a walker, whatever their speed
+const POOL_SIZE = TRAIL_STEPS + 2; // Prints kept per character; the oldest is reused first
+const STRIDE = 0.6; // Distance travelled between prints (alternating feet)
+const FOOT_SIZE: [number, number] = [0.32, 0.8];
+const FOOT_SPREAD = 0.15; // Sideways offset of each foot from the walking line
+const INK_IN = 0.18; // Seconds for a fresh print to soak into the parchment
+const HOLD = 0.5; // Seconds a print stays fully inked
+const FADE = 0.9; // Seconds a print takes to fade away
+const SETTLE_TIME = 0.35; // Standing still this long plants both feet side by side
+const PRINT_OPACITY = 0.88;
+
+// Shoe-sole prints (toe pointing up the texture); the right foot is the left mirrored
+const footprintTextures: { left?: THREE.Texture; right?: THREE.Texture } = {};
+const getFootprintTexture = (isLeft: boolean): THREE.Texture => {
+  const key = isLeft ? 'left' : 'right';
+  const cached = footprintTextures[key];
+  if (cached) return cached;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 256;
+  canvas.width = 64;
+  canvas.height = 160;
   const ctx = canvas.getContext('2d')!;
+  if (!isLeft) {
+    ctx.translate(64, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.fillStyle = INK;
+  ctx.shadowColor = INK;
+  ctx.shadowBlur = 3; // Slight ink bleed at the edges
 
-  // Clear canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Set drawing style
-  ctx.fillStyle = '#3d2817'; // Ink color
-
-  const width = 50;
-  const heelHeight = 70;
-  const toeHeight = 90;
-  const gap = 15;
-  const centerX = canvas.width / 2;
-  const startY = 30;
-
-  // Draw heel section (bottom rectangle with slightly rounded corners)
+  // Sole: toe box bulging toward the big toe, curving in at the arch
   ctx.beginPath();
-  ctx.roundRect(centerX - width / 2, startY, width, heelHeight, 5);
+  ctx.moveTo(26, 6);
+  ctx.bezierCurveTo(44, 2, 60, 16, 59, 40);
+  ctx.bezierCurveTo(58, 60, 50, 74, 44, 90);
+  ctx.bezierCurveTo(36, 94, 24, 94, 14, 90);
+  ctx.bezierCurveTo(6, 72, 3, 46, 6, 28);
+  ctx.bezierCurveTo(9, 14, 15, 8, 26, 6);
   ctx.fill();
 
-  // Draw toe section (rounded top)
-  const toeY = startY + heelHeight + gap;
+  // Block heel
   ctx.beginPath();
-  ctx.moveTo(centerX - width / 2, toeY);
-  ctx.lineTo(centerX - width / 2, toeY + toeHeight * 0.6);
-  // Rounded toe top
-  ctx.quadraticCurveTo(
-    centerX - width / 2, toeY + toeHeight,
-    centerX, toeY + toeHeight
-  );
-  ctx.quadraticCurveTo(
-    centerX + width / 2, toeY + toeHeight,
-    centerX + width / 2, toeY + toeHeight * 0.6
-  );
-  ctx.lineTo(centerX + width / 2, toeY);
-  ctx.closePath();
+  ctx.moveTo(18, 106);
+  ctx.lineTo(42, 106);
+  ctx.quadraticCurveTo(46, 106, 46, 110);
+  ctx.lineTo(46, 138);
+  ctx.bezierCurveTo(46, 152, 38, 156, 30, 156);
+  ctx.bezierCurveTo(22, 156, 14, 152, 14, 138);
+  ctx.lineTo(14, 110);
+  ctx.quadraticCurveTo(14, 106, 18, 106);
   ctx.fill();
 
-  // Create texture
+  // Dry-ink speckles so each print looks stamped rather than painted
+  const random = seededRandom(isLeft ? 17 : 29);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.shadowBlur = 0;
+  for (let i = 0; i < 14; i++) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.25 + random() * 0.35})`;
+    ctx.beginPath();
+    ctx.arc(10 + random() * 44, 10 + random() * 140, 1 + random() * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
+  texture.anisotropy = 4;
+  footprintTextures[key] = texture;
   return texture;
 };
 
 /**
- * Renders an animated character with footsteps on the map
+ * Scroll-style banner shape with notched ends, sized around the name
  */
-export const Character3D: React.FC<Character3DProps> = ({ character, isActive }) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const [stepTimer, setStepTimer] = useState(0);
-  const [previousPositions, setPreviousPositions] = useState<Array<{x: number, z: number, rotation: number, time: number}>>([]);
-  const [currentRotation, setCurrentRotation] = useState(0);
+const bannerShape = (width: number, height: number): { shape: THREE.Shape; outline: THREE.Vector3[] } => {
+  const hw = width / 2;
+  const hh = height / 2;
+  const notch = height * 0.45;
+  const points = [
+    new THREE.Vector2(-hw - notch, hh),
+    new THREE.Vector2(hw + notch, hh),
+    new THREE.Vector2(hw, 0),
+    new THREE.Vector2(hw + notch, -hh),
+    new THREE.Vector2(-hw - notch, -hh),
+    new THREE.Vector2(-hw, 0),
+  ];
+  return {
+    shape: new THREE.Shape(points),
+    outline: [...points, points[0]].map((p) => new THREE.Vector3(p.x, p.y, 0.01)),
+  };
+};
 
-  // Track previous position to detect movement from ANY source (AI or keyboard)
-  const previousPositionRef = useRef<{x: number, z: number} | null>(null);
+/**
+ * Renders a character as inked footprints that stamp onto the parchment and fade,
+ * plus a name banner. Prints live in a fixed pool of meshes updated every frame,
+ * so walking never triggers React re-renders.
+ */
+export const Character3D: React.FC<Character3DProps> = ({ character, isActive, isHighlighted = false }) => {
+  const currentRef = useRef<THREE.Group>(null);
+  const bannerRef = useRef<THREE.Group>(null);
+  const printRefs = useRef<Array<THREE.Mesh | null>>([]);
 
-  // Failsafe for genuinely stuck characters (not resting)
-  const lastMoveTimeRef = useRef<number>(0);
-  const stuckCheckPositionRef = useRef<{x: number, z: number} | null>(null);
-  const hasAttemptedMovementRef = useRef<boolean>(false);
+  const movement = useRef({
+    previous: null as { x: number; z: number } | null,
+    sinceStep: 0,
+    heading: 0,
+    nextIsLeft: true,
+    stillFor: 0,
+    settled: false,
+    prints: [] as Footprint[],
+    // Failsafe for genuinely stuck characters (not resting)
+    stuckCheck: null as { x: number; z: number } | null,
+    lastProgressTime: 0,
+    triedToMove: false,
+  });
 
-  // Create footprint texture once using useMemo (must be before conditional return!)
-  const footprintTexture = useMemo(() => createFootprintTexture(), []);
+  const textures = useMemo(() => ({ left: getFootprintTexture(true), right: getFootprintTexture(false) }), []);
+
+  const banner = useMemo(() => {
+    const width = character.name.length * 0.2 + 0.1;
+    return { width, ...bannerShape(width, 0.62) };
+  }, [character.name]);
 
   useFrame((state, delta) => {
-    if (isActive) {
-      // Get position BEFORE update
-      const oldPos = previousPositionRef.current || character.getPosition2D();
+    if (!isActive) return;
+    const m = movement.current;
+    const now = state.clock.elapsedTime;
+    const oldPos = m.previous || character.getPosition2D();
 
-      // Update character (AI pathfinding)
-      character.update(delta);
+    character.update(delta);
 
-      // Get position AFTER update (includes both AI and keyboard movement)
-      const newPos = character.getPosition2D();
+    const newPos = character.getPosition2D();
+    m.previous = { ...newPos };
+    const distance = Math.hypot(newPos.x - oldPos.x, newPos.z - oldPos.z);
 
-      // Store current position for next frame
-      previousPositionRef.current = { ...newPos };
+    if (distance > 0.001) m.triedToMove = true;
+    if (distance > 0.002) m.heading = Math.atan2(newPos.z - oldPos.z, newPos.x - oldPos.x);
 
-      // Check if character moved significantly
-      const distance = Math.sqrt(
-        Math.pow(newPos.x - oldPos.x, 2) +
-        Math.pow(newPos.z - oldPos.z, 2)
-      );
+    // Reset characters that keep trying to move but make no progress
+    if (!m.stuckCheck) {
+      m.stuckCheck = { ...newPos };
+      m.lastProgressTime = now;
+    } else if (Math.hypot(newPos.x - m.stuckCheck.x, newPos.z - m.stuckCheck.z) > 0.5) {
+      m.stuckCheck = { ...newPos };
+      m.lastProgressTime = now;
+      m.triedToMove = false;
+    } else if (m.triedToMove && now - m.lastProgressTime > 8) {
+      console.log(`${character.name} is stuck in wall! Resetting...`);
+      character.reset();
+      m.stuckCheck = null;
+      m.triedToMove = false;
+    }
 
-      // Track if character is attempting to move (not just resting)
-      if (distance > 0.001) {
-        hasAttemptedMovementRef.current = true;
+    const stamp = (x: number, z: number, isLeft: boolean) => {
+      const side = isLeft ? FOOT_SPREAD : -FOOT_SPREAD; // Left foot sits to the left of the heading
+      m.prints.push({
+        x: x + Math.cos(m.heading - Math.PI / 2) * side,
+        z: z + Math.sin(m.heading - Math.PI / 2) * side,
+        rotation: m.heading,
+        isLeft,
+        born: now,
+      });
+      if (m.prints.length > POOL_SIZE) m.prints.shift();
+    };
+
+    if (distance > 0.0005) {
+      // Walking: stamp alternating feet every stride
+      m.stillFor = 0;
+      m.settled = false;
+      m.sinceStep += distance;
+      if (m.sinceStep >= STRIDE || m.prints.length === 0) {
+        m.sinceStep = 0;
+        stamp(newPos.x, newPos.z, m.nextIsLeft);
+        m.nextIsLeft = !m.nextIsLeft;
+      }
+    } else {
+      // Standing: bring the trailing foot alongside the last print
+      m.stillFor += delta;
+      if (!m.settled && m.stillFor > SETTLE_TIME && m.prints.length > 0) {
+        const last = m.prints[m.prints.length - 1];
+        const lastSide = last.isLeft ? FOOT_SPREAD : -FOOT_SPREAD;
+        const centerX = last.x - Math.cos(last.rotation - Math.PI / 2) * lastSide;
+        const centerZ = last.z - Math.sin(last.rotation - Math.PI / 2) * lastSide;
+        m.heading = last.rotation;
+        stamp(centerX, centerZ, !last.isLeft);
+        m.nextIsLeft = last.isLeft;
+        m.settled = true;
+      }
+    }
+
+    // Animate the pool: ink in with a small stamp, hold, then fade out.
+    // The newest pair never fades, so a standing character keeps both feet on the map.
+    const newestPair = m.prints.length - 2;
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const mesh = printRefs.current[i];
+      if (!mesh) continue;
+      const print = m.prints[i];
+      if (!print) {
+        mesh.visible = false;
+        continue;
       }
 
-      // Update current rotation when moving to know which direction to face
-      if (distance > 0.01) {
-        const angle = Math.atan2(newPos.z - oldPos.z, newPos.x - oldPos.x);
-        setCurrentRotation(angle);
-      }
+      const age = now - print.born;
+      const inked = Math.min(age / INK_IN, 1);
+      const faded = i >= newestPair ? 1 : 1 - Math.min(Math.max((age - HOLD) / FADE, 0), 1);
+      // Taper the tail so fast walkers don't drag a long line of prints
+      const stepsBehind = m.prints.length - 1 - i;
+      const tapered = Math.min(Math.max((TRAIL_STEPS - stepsBehind) / 3, 0), 1);
+      const opacity = PRINT_OPACITY * inked * faded * tapered;
+      mesh.visible = opacity > 0.01;
+      if (!mesh.visible) continue;
 
-      // Failsafe: Check if character is genuinely stuck (trying to move but can't)
-      if (!stuckCheckPositionRef.current) {
-        stuckCheckPositionRef.current = { ...newPos };
-        lastMoveTimeRef.current = state.clock.elapsedTime;
-      } else {
-        const stuckDistance = Math.sqrt(
-          Math.pow(newPos.x - stuckCheckPositionRef.current.x, 2) +
-          Math.pow(newPos.z - stuckCheckPositionRef.current.z, 2)
-        );
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      material.opacity = opacity;
+      const map = print.isLeft ? textures.left : textures.right;
+      if (material.map !== map) material.map = map;
 
-        // If character has made progress, update check position
-        if (stuckDistance > 0.5) {
-          stuckCheckPositionRef.current = { ...newPos };
-          lastMoveTimeRef.current = state.clock.elapsedTime;
-          hasAttemptedMovementRef.current = false;
-        }
-        // Only reset if they've tried to move but haven't made progress (stuck in wall)
-        else if (hasAttemptedMovementRef.current && state.clock.elapsedTime - lastMoveTimeRef.current > 8) {
-          console.log(`${character.name} is stuck in wall! Resetting...`);
-          character.reset();
-          stuckCheckPositionRef.current = null;
-          hasAttemptedMovementRef.current = false;
-        }
-      }
+      mesh.position.set(print.x, 0.075 + i * 0.0005, print.z);
+      mesh.rotation.set(-Math.PI / 2, 0, -print.rotation - Math.PI / 2);
+      mesh.scale.setScalar(1 + (1 - inked) * 0.3);
+    }
 
-      // Add footstep every 0.2 units traveled (only if actually moving)
-      const newStepTimer = stepTimer + distance;
-      if (newStepTimer > 0.2 && distance > 0.01) {
-        // Calculate rotation based on movement direction
-        const angle = Math.atan2(newPos.z - oldPos.z, newPos.x - oldPos.x);
-
-        setPreviousPositions(prev => {
-          const updated = [...prev, {
-            x: newPos.x,
-            z: newPos.z,
-            rotation: angle,
-            time: state.clock.elapsedTime
-          }];
-          // Keep only last 5 footsteps for better trail
-          return updated.slice(-5);
-        });
-
-        setStepTimer(0);
-      } else {
-        setStepTimer(newStepTimer);
-      }
+    // Banner follows the character and grows as the camera pulls back so names stay readable
+    if (currentRef.current) currentRef.current.position.set(newPos.x, 0, newPos.z);
+    if (bannerRef.current && currentRef.current) {
+      const cameraDistance = state.camera.position.distanceTo(currentRef.current.position);
+      const scale = Math.min(Math.max(cameraDistance / 26, 1), 3.2) * (isHighlighted ? 1.35 : 1);
+      bannerRef.current.scale.setScalar(scale);
+      bannerRef.current.position.y = 1.2 + scale * 0.35;
     }
   });
 
   if (!isActive) return null;
 
-  const pos = character.getPosition3D(0.05);
-
-  // Use the most recent trail rotation for current position, or fallback to currentRotation
-  const displayRotation = previousPositions.length > 0
-    ? previousPositions[previousPositions.length - 1].rotation
-    : currentRotation;
-
   return (
-    <group ref={groupRef}>
-      {/* Render trail of footsteps - always facing movement direction */}
-      {previousPositions.map((step, index) => {
-        const age = previousPositions.length - index;
-        // Better fade gradient: newest (0.85) -> oldest (0.15)
-        const opacity = Math.max(0.15, 0.85 - age * 0.14);
-        const isLeft = index % 2 === 0;
-        const offsetX = isLeft ? -0.25 : 0.25;
+    <group>
+      {/* Footprint pool, positioned and faded each frame */}
+      {Array.from({ length: POOL_SIZE }, (_, index) => (
+        <mesh key={index} ref={(mesh) => (printRefs.current[index] = mesh)} visible={false}>
+          <planeGeometry args={FOOT_SIZE} />
+          <meshBasicMaterial map={textures.left} transparent opacity={0} depthWrite={false} />
+        </mesh>
+      ))}
 
-        return (
-          <mesh
-            key={`${step.x}-${step.z}-${index}`}
-            position={[
-              step.x + Math.cos(step.rotation + Math.PI / 2) * offsetX,
-              0.08,
-              step.z + Math.sin(step.rotation + Math.PI / 2) * offsetX
-            ]}
-            rotation={[-Math.PI / 2, 0, isLeft ? step.rotation + Math.PI / 2 : step.rotation - Math.PI / 2]}
-          >
-            <planeGeometry args={[0.5, 1.0]} />
-            <meshBasicMaterial
-              map={footprintTexture}
-              transparent
-              opacity={opacity}
-              depthWrite={false}
-              side={THREE.DoubleSide}
-            />
+      <group ref={currentRef}>
+        {/* Name on a little scroll banner that always faces the viewer */}
+        <Billboard ref={bannerRef} position={[0, 1.5, 0]}>
+          <mesh>
+            <shapeGeometry args={[banner.shape]} />
+            <meshBasicMaterial color={PARCHMENT} />
           </mesh>
-        );
-      })}
-
-      {/* Current position - two shoe stamps facing movement direction (matching trail exactly) */}
-      {/* Left shoe */}
-      <mesh
-        position={[
-          pos.x + Math.cos(displayRotation + Math.PI / 2) * -0.25,
-          0.08,
-          pos.z + Math.sin(displayRotation + Math.PI / 2) * -0.25
-        ]}
-        rotation={[-Math.PI / 2, 0, displayRotation + Math.PI / 2]}
-      >
-        <planeGeometry args={[0.5, 1.0]} />
-        <meshBasicMaterial
-          map={footprintTexture}
-          transparent
-          opacity={0.9}
-          depthWrite={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* Right shoe */}
-      <mesh
-        position={[
-          pos.x + Math.cos(displayRotation + Math.PI / 2) * 0.25,
-          0.08,
-          pos.z + Math.sin(displayRotation + Math.PI / 2) * 0.25
-        ]}
-        rotation={[-Math.PI / 2, 0, displayRotation - Math.PI / 2]}
-      >
-        <planeGeometry args={[0.5, 1.0]} />
-        <meshBasicMaterial
-          map={footprintTexture}
-          transparent
-          opacity={0.9}
-          depthWrite={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      <group position={[pos.x, 0.08, pos.z]}>
-
-        {/* Character name label - still use character color for identification */}
-        <Text
-          position={[0, 1.2, 0]}
-          fontSize={0.35}
-          color={character.color}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-          font="https://fonts.gstatic.com/s/shadowsintolight/v19/UqyNK9UOIntux_czAvDQx_ZcHqZXBNQDcsr4xzSMYA.woff"
-        >
-          {character.name}
-        </Text>
+          <Line points={banner.outline} color={INK} lineWidth={1.4} />
+          <Text position={[0, -0.02, 0.02]} fontSize={0.38} color={INK} anchorX="center" anchorY="middle" font={FONT_ITALIC}>
+            {character.name}
+          </Text>
+        </Billboard>
       </group>
     </group>
   );
